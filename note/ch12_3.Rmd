@@ -1,0 +1,403 @@
+---
+title: "『問題解決力を鍛える！　アルゴリズムとデータ構造』"
+subtitle: "第12章 ソート"
+author: "[@anemptyarchive](https://www.anarchive-beta.com/)"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output: 
+  html_document: 
+    toc: TRUE       # 目次
+    toc_depth: 3    # 目次の見出しレベル
+    toc_float: TRUE # 目次のスクロール追跡
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  message = FALSE, error = FALSE, warning = FALSE # メッセージを非表示
+)
+```
+
+----
+
+【編集履歴】
+
+- 2023.08.16：執筆開始
+- 2023.08.16：「挿入ソート」を追加
+
+
+----
+
+# 12.3 挿入ソートの実装と可視化
+
+　挿入ソート(insertion sort)を実装します。また、ソートの推移のアニメーションを作成して、アルゴリズムを確認します。  
+<br>
+
+　利用するパッケージを読み込みます。
+
+```{r, eval=FALSE}
+# 利用パッケージ
+library(tidyverse)
+library(gganimate)
+```
+
+```{r, echo=FALSE}
+### 資料作成用
+
+# チェック用
+library(ggplot2)
+```
+
+　この記事では、基本的に `パッケージ名::関数名()` の記法を使っているので、パッケージを読み込む必要はありません。ただし、作図コードについてはパッケージ名を省略しているので、`ggplot2` を読み込む必要があります。  
+　また、ネイティブパイプ演算子 `|>` を使っています。`magrittr` パッケージのパイプ演算子 `%>%` に置き換えても処理できますが、その場合は `magrittr` を読み込む必要があります。  
+
+　「ソートの可視化」において、`gganimate` パッケージを利用してアニメーション(gif画像)を作成します。ソートの実装自体には使いません。  
+<br>
+
+
+## ソートの実装
+
+　まずは、挿入ソートのアルゴリズムを関数として実装します。  
+<br>
+
+　挿入ソートを実装します。
+
+```{r}
+# 挿入ソートの実装
+insertion_sort <- function(vec) {
+  
+  # 要素数を取得
+  N <- length(vec)
+  
+  # 要素ごとに処理
+  for(i in 2:N) { # (1番目は不要)
+    
+    # i番目の値を取得
+    val <- vec[i]
+    
+    # i番目から逆順に挿入位置jを探索:(j ≤ i)
+    for(j in (i-1):0) { # (i番目は不要・0番目は挿入処理との兼ね合い用)
+      
+      # j番目とi番目の値を大小比較
+      if(j <= 0) {
+        
+        # 全要素を比較したらループを終了
+        break
+        
+      } else if(vec[j] > val) {
+        
+        # j番目の値を1つ後に移動
+        vec[j+1] <- vec[j]
+        
+      } else {
+        
+        # i番目の値以下ならループを終了
+        break
+      }
+    }
+    
+    # i番目の値をj番目に挿入
+    vec[j+1] <- val
+  }
+  
+  # 数列を出力
+  return(vec)
+}
+```
+
+　数列を `vec`、数列の要素数を `N` とします。  
+　`vec` の `1` 番目から `N` 番目まで(を `i` として)の要素を順番に入れ替えていきます。ただしアルゴリズム上、1番目の要素は入れ替えが行われないので、処理を省略します。  
+　`vec` の `i` 番目の要素 `vec[i]` の入れ替えでは、`i` 番目から `1` 番目まで(を `j` として)の要素を順番に大小比較します。ただしアルゴリズム上、i番目の要素は入れ替えが行われないので、処理を省略します。  
+
+　`i` 番目の要素 `vec[i]` を `val` としておき、`val` と `j` 番目の要素 `vec[j]` を比較します。  
+　`j` 番目の値が大きければ、`j` 番目の値を `j+1` 番目の値に複製します。この操作が、j番目の要素を1つ後に移動するのに対応します。ただしこの時点では、j番目とj+1番目が同じ値です。  
+　`j` 番目の値が小さければ、`break` でループ処理を終了して、`j+1` 番目の要素を `val` で上書きします。この操作が、値の挿入に対応します。j+1番目の値は、1つ前の試行においてj+2番目に移動(複製)されています。  
+　全ての要素が大きかった場合は、`j` を `0` にしておき、`j+1` (`1`)番目の要素を `val` で上書きします。  
+
+　アルゴリズムの詳しい解説は、本のcode 12.1などを参照してください。  
+<br>
+
+　実装した関数を試してみます。  
+
+　要素数を指定して、数列を作成します。
+
+```{r}
+# 要素数を指定
+N <- 50
+
+# 数列を生成
+a <- sample(x = 1:(2*N), size = N, replace = TRUE)
+a
+```
+
+　乱数生成関数 `sample()` などで数値ベクトルを生成します。  
+
+　挿入ソートにより並べ替えます。
+
+```{r}
+# ソート
+insertion_sort(a)
+```
+
+　目で確認するのはアレなので、組み込み関数のソート結果と比較して確認します。
+
+```{r}
+# 確認
+sum(!(insertion_sort(a) == sort(a)))
+```
+
+　`!` で `TRUE, FALSE` を反転させて `sum()` で合計することで、一致しない要素数を得られます。結果が `0` であれば全ての要素が一致したことが分かります。  
+<br>
+
+
+## ソートの可視化
+
+　次は、挿入ソートのアルゴリズムをグラフで確認します。  
+<br>
+
+　要素数を指定して、数列を作成します。
+
+```{r}
+# 要素数を指定
+N <- 20
+
+# 数列を生成
+a <- rnorm(n = N, mean = 0, sd = 1) |> 
+  round(digits = 1)
+table(a)
+```
+
+　この例では、(負の値を含めるため)正規乱数生成関数 `rnorm()` で値を生成して、(重複を含めるため)丸め込み関数 `round()` で小数第一位にしておきます。  
+
+　数列をデータフレームに格納します。  
+
+```{r}
+# 要素数を取得
+N <- length(a)
+
+# 数列を格納
+tmp_df <- tibble::tibble(
+  iteration = 0,   # 試行回数
+  id        = 1:N, # 元のインデックス
+  index     = 1:N, # 各試行のインデックス
+  value     = a    # 要素
+)
+tmp_df
+```
+
+　作図用に、インデックスなどの値とあわせて数列を格納します。数列のみが与えられている場合は、要素数を `N` とします。  
+
+　数列を棒グラフで確認します。
+
+```{r, fig.width=8, fig.height=6, dpi=100}
+# 数列を作図
+ggplot() + 
+  geom_bar(data = tmp_df, 
+           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + 
+  theme(panel.grid.minor.x = element_blank()) + 
+  labs(title = "numerical sequence", 
+       subtitle = paste0("iteration: ", unique(tmp_df[["iteration"]])), 
+       fill = "value", 
+       x = "index", y = "value")
+```
+
+<br>
+
+　1データずつ入れ替え処理を行い、数列を記録します。
+
+```{r}
+# 作図用のオブジェクトを初期化
+id_vec   <- 1:N
+trace_df <- tmp_df
+
+# 挿入ソート
+for(i in 1:N) {
+  if(i > 1) { # (初回は不要)
+    
+    # i番目の値を取得
+    v <- a[i]
+    
+    # i番目から逆順に挿入位置jを探索:(j ≤ i)
+    for(j in (i-1):0) { # (i番目は不要・0番目は挿入処理との兼ね合い用)
+      
+      # j番目とi番目の値を大小比較
+      if(j <= 0) {
+        
+        # 全要素を比較したらループを終了
+        break
+        
+      } else if(a[j] > v) {
+        
+        # j番目の値を1つ後に移動
+        a[j+1] <- a[j]
+        id_vec[1:N] <- replace(x = id_vec, list = j+1, values = id_vec[j])
+        
+      } else {
+        
+        # i番目の値以下ならループを終了
+        break
+      }
+    }
+    
+    # i番目の値をj番目に挿入
+    a[j+1] <- v
+    id_vec[1:N] <- replace(x = id_vec, list = j+1, values = i)
+  }
+  
+  # 数列を格納
+  tmp_df <- tibble::tibble(
+    iteration = i, 
+    id        = id_vec, 
+    index     = 1:N, 
+    value     = a
+  )
+  
+  # 数列を記録
+  trace_df <- dplyr::bind_rows(trace_df, tmp_df)
+  
+  # 途中経過を表示
+  #print(paste0("--- iteration: ", i, " ---"))
+  #print(a)
+}
+```
+
+　「ソートの実装」のときと同様にして、要素を入れ替えていきます。  
+　数列 `a` の初期値のインデックス(`1` から `N` の整数)を `id_vec` としておき、`a` の要素の入れ替えに対応するように `id_vec` の要素も入れ替えます。  
+　試行ごとに、数列やインデックスをデータフレームに保存します。  
+<br>
+
+　挿入データの描画用のデータフレームを作成します。
+
+```{r}
+# 挿入データを作成
+target_df <- trace_df |> 
+  dplyr::filter(iteration == id) # i番目の要素を抽出
+target_df
+```
+
+　試行回数(`iteration` 列)と元のインデックス(`id` 列)が一致するデータ(行)を抽出します。  
+
+　試行ごとに数列のグラフを作成します。
+
+```{r, fig.width=12, fig.height=12, dpi=100}
+# 全試行の数列を作図
+ggplot() + 
+  geom_bar(data = trace_df, 
+           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + # 全ての要素
+  geom_bar(data = target_df,
+           mapping = aes(x = id, y = value), stat = "identity",
+           color = "red", alpha = 0, linewidth = 0.5, linetype = "dashed") + # 挿入前のi番目の要素
+  geom_bar(data = target_df,
+           mapping = aes(x = index, y = value), stat = "identity",
+           color = "red", alpha = 0, linewidth = 0.5, linetype = "dotted") + # 挿入後のi番目の要素
+  geom_segment(data = target_df, 
+               mapping = aes(x = id, y = value, xend = -Inf, yend = value, color = factor(value)), 
+               linewidth = 0.5, linetype = "dashed", show.legend = FALSE) + # 挿入データまでの上限値
+  facet_wrap(iteration ~ ., scales = "free_x", labeller = label_both) + # 試行ごとに分割
+  theme(panel.grid.minor.x = element_blank(), 
+        legend.position = "right") + 
+  labs(title = "insertion sort", 
+       fill = "value", 
+       x = "index", y = "value")
+```
+
+　`facet_wrap()` で、試行(`iteration` 列)ごとに分割して棒グラフを描画します。  
+　挿入前の要素(バー)の位置は元のインデックス(`id` 列)、挿入後の位置は `iteration` 回目時点のインデックス(`index` 列)を使います。  
+
+　初期値を0回目として、N回目までの「入れ替え後の数列」をそれぞれ棒グラフ(バー)で表します。  
+　i回目の試行(i+1枚目のグラフ)において、挿入した要素を赤色の枠線のバー、またその値を水平線で示します。破線のバーが挿入前の位置、点線のバーが挿入後の位置です。  
+　挿入前の位置より左(小さいインデックス)の要素(バー)はソート済み、右(大きいインデックス)の要素(バー)は未処理のデータです。  
+　挿入後の位置より左の要素は挿入した要素よりも値(高さ)が小さく、右の要素は値が大きいのが分かります。  
+<br>
+
+　同様に、挿入データの描画用のデータフレームを作成します。
+
+```{r}
+# 挿入データを作成
+target_df <- trace_df |> 
+    dplyr::filter((iteration + 1) == index) # i番目の要素を抽出
+target_df
+```
+
+　こちらは、試行回数(`iteration` 列)と元のインデックス(`id` 列)が一致する要素の1試行前のデータを抽出します。  
+
+　重複ラベルの描画用のデータフレームを作成します。
+
+```{r}
+# 重複ラベルを作成
+dup_label_df <- trace_df |> 
+  dplyr::arrange(iteration, id) |> # IDの割当用
+  dplyr::group_by(iteration, value) |> # IDの割当用
+  dplyr::mutate(
+    dup_id    = dplyr::row_number(id), # 重複IDを割り当て
+    dup_num   = max(dup_id), # 重複の判定用
+    dup_label = dplyr::if_else(
+      condition = dup_num > 1, 
+      true = paste0("(", dup_id, ")"), 
+      false = ""
+    ) # 重複要素のみラベルを作成
+  ) |> 
+  dplyr::ungroup() |> 
+  dplyr::arrange(iteration, index)
+dup_label_df
+```
+
+　重複している値の要素にのみ、それぞれ通し番号のラベルを作成します。  
+
+　推移のアニメーションを作成します。
+
+```{r}
+# ソートのアニメーションを作図
+graph <- ggplot() + 
+  geom_bar(data = trace_df, 
+           mapping = aes(x = index, y = value, fill = factor(value), group = factor(id)), stat = "identity") + # 全要素
+  geom_bar(data = target_df,
+           mapping = aes(x = index, y = value, group = factor(id)), stat = "identity",
+           color = "red", alpha = 0, linewidth = 1, linetype = "dashed") + # 挿入データ
+  geom_segment(data = target_df,
+               mapping = aes(x = index, y = value, xend = -2, yend = value,
+                             color = factor(value), group = factor(id)),
+               linewidth = 1, linetype = "dashed", show.legend = FALSE) + # 挿入データまでの上限値
+  geom_text(data = trace_df, 
+            mapping = aes(x = index, y = 0, label = as.character(value), group = factor(id)), 
+            vjust = -0.5, size = 5) + # 要素ラベル
+  geom_text(data = dup_label_df, 
+            mapping = aes(x = index, y = 0, label = dup_label, group = factor(id)), 
+            vjust = 1, size = 4) + # 重複ラベル
+  gganimate::transition_states(states = iteration, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
+  gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
+  coord_cartesian(xlim = c(0, N+1)) + # (上限値の線用)
+  theme(panel.grid.minor.x = element_blank(), 
+        legend.position = "none") + 
+  labs(title = "insertion sort", 
+       subtitle = "iteration: {next_state}", 
+       fill = "value", 
+       x = "index", y = "value")
+
+# 1試行当たりのフレーム数を指定
+s <- 20
+
+# gif画像を作成
+gganimate::animate(
+  plot = graph, 
+  nframes = (N+1 + 2)*s, start_pause = s, end_pause = s, fps = 20, 
+  width = 800, height = 600, 
+  renderer = gganimate::gifski_renderer()
+)
+```
+
+　`transition_states()` のフレーム制御の引数 `states` に試行回数列 `iteration` を指定して、これまでと同様に作図します。  
+　`animate()` の `plot` 引数にグラフオブジェクト、`nframes` 引数にフレーム数を指定して、gif画像を作成します。  
+　初期値を含むため試行回数は `N+1` です。`transition_states()` でアニメーションを作成すると、フレーム間の値を補完して、状態の遷移を描画します。遷移のフレームを `s` として、試行回数の `s` 倍の値を `nframes` 引数に指定します。  
+
+　左(1番目)の要素から順番にソートされるのを確認できます。また、重複要素の順序が入れ替わらない(安定性・stable性)も確認できます。  
+<br>
+
+　この記事では、挿入ソートを実装しました。次の記事では、マージソートを実装します。  
+<br>
+
+
+# 参考文献
+
+- 大槻兼資(著), 秋葉拓哉(監修)『問題解決力を鍛える！　アルゴリズムとデータ構造』講談社サイエンティク, 2021年.
+
+
