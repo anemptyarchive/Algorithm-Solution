@@ -88,8 +88,8 @@ ggplot() +
   geom_bar(data = tmp_df, 
            mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + 
   theme(panel.grid.minor.x = element_blank()) + 
-  labs(title = "insertion sort", 
-       subtitle = paste0("i = ", unique(tmp_df[["i"]])), 
+  labs(title = "numerical sequence", 
+       subtitle = paste0("iteration: ", unique(tmp_df[["iteration"]])), 
        fill = "value", 
        x = "index", y = "value")
 
@@ -144,7 +144,7 @@ for(i in 1:N) {
   trace_df <- dplyr::bind_rows(trace_df, tmp_df)
   
   # 途中経過を表示
-  print(paste0("--- iteration:", i, " ---"))
+  print(paste0("--- iteration: ", i, " ---"))
   print(a)
 }
 
@@ -160,14 +160,15 @@ ggplot() +
   geom_bar(data = target_df,
            mapping = aes(x = id, y = value), stat = "identity",
            color = "red", alpha = 0, linewidth = 0.6, linetype = "dashed") + # 挿入前のi番目の要素
-  geom_bar(data = insert_df,
+  geom_bar(data = target_df,
            mapping = aes(x = index, y = value), stat = "identity",
            color = "red", alpha = 0, linewidth = 0.6, linetype = "dotted") + # 挿入後のi番目の要素
   geom_segment(data = target_df, 
                mapping = aes(x = id, y = value, xend = -Inf, yend = value, color = factor(value)), 
                linewidth = 0.6, linetype = "dashed", show.legend = FALSE) + # 挿入データまでの上限値
   facet_wrap(iteration ~ ., scales = "free_x", labeller = label_both) + # 試行ごとに分割
-  theme(panel.grid.minor.x = element_blank()) + 
+  theme(panel.grid.minor.x = element_blank(), 
+        legend.position = "right") + 
   labs(title = "insertion sort", 
        fill = "value", 
        x = "index", y = "value")
@@ -216,7 +217,7 @@ graph <- ggplot() +
   theme(panel.grid.minor.x = element_blank(), 
         legend.position = "none") + 
   labs(title = "insertion sort", 
-       subtitle = "iteration : {next_state}", 
+       subtitle = "iteration: {next_state}", 
        fill = "value", 
        x = "index", y = "value")
 
