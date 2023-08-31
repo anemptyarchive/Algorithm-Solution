@@ -38,6 +38,7 @@ bucket_sort <- function(vec, max_val = NA) {
   for(v in 1:max_val) {
     
     # 累積要素数をカウント
+    #sum_vec[v] <- ifelse(test = v == 1, yes = 0, no = sum_vec[v-1]) + num_vec[v]
     if(v == 1) { # (初回)
       sum_vec[v] <- num_vec[v]
     } else {
@@ -84,6 +85,7 @@ sum(!(bucket_sort(a) == sort(a)))
 seq_df <- tibble::tibble(
   index = 1:N, # 各試行のインデックス
   value = a    # 要素
+  #value = bucket_sort(a) # 要素
 )
 
 # 数列を作図
@@ -96,7 +98,7 @@ ggplot() +
        x = "index", y = "value")
 
 
-### ・一度に並べ替え -----
+### ・操作の確認 -----
 
 # 数列を格納
 sequence_df <- tibble::tibble(
@@ -159,7 +161,6 @@ reorder_df <- tibble::tibble(
   # 数列用
   value = a, 
   # タイル用
-  x        = value, 
   y        = 0.5, 
   height   = 1, 
   alpha    = 0.1, 
@@ -171,7 +172,7 @@ reorder_df <- tibble::tibble(
   dplyr::mutate(
     x = dplyr::row_number() # 累積要素数
   ) |> 
-  dplyr::arrange(id) |> # IDの割当用
+  dplyr::arrange(id) |> 
   dplyr::group_by(value) |> # IDの割当用
   dplyr::mutate(
     # 重複ラベル用
@@ -202,7 +203,7 @@ swap_df <- tibble::tibble(
     index = dplyr::row_number(), # 入替後のインデックス
     x     = index
   ) |> 
-  dplyr::arrange(id) |> # IDの割当用
+  dplyr::arrange(id) |> 
   dplyr::group_by(value) |> # IDの割当用
   dplyr::mutate(
     # 重複ラベル用
@@ -223,27 +224,26 @@ trace_df <- dplyr::bind_rows(
 )
 
 
-### ・1つずつ並べ替え -----
+### ・入替の確認 -----
 
 # インデックスの小さい順に要素を取り出す
 sequence_df <- tidyr::expand_grid(
   iteration = 0:N, # カウント時の試行回数
   id        = 1:N  # 元のインデックス
-) |> 
+) |> # 試行ごとに要素IDを複製
   dplyr::mutate(
     # 数列用
     index = id, 
     value = a[id], 
     # タイル用
-    x         = index, 
-    y         = 0.5 * value, 
-    height    = value, 
-    alpha     = 1, 
-    linetype  = "solid", 
+    x        = index, 
+    y        = 0.5 * value, 
+    height   = value, 
+    alpha    = 1, 
+    linetype = "blank", 
     # ラベル用
     label_y = 0
   ) |> 
-  dplyr::arrange(iteration, id) |> # IDの割当用
   dplyr::group_by(iteration, value) |> # IDの割当用
   dplyr::mutate(
     # 重複ラベル用
@@ -260,17 +260,16 @@ sequence_df <- tidyr::expand_grid(
 count_df <- tidyr::expand_grid(
   iteration = 0:N, # カウント時の試行回数
   id        = 1:N  # 元のインデックス
-) |> 
+) |> # 試行ごとに要素IDを複製
   dplyr::mutate(
     # 数列用
     value = a[id], 
     # タイル用
-    x         = value, 
-    height    = 1, 
-    alpha     = 0.1, 
-    linetype  = "dashed"
+    x        = value, 
+    height   = 1, 
+    alpha    = 0.1, 
+    linetype = "dashed"
   ) |> 
-  dplyr::arrange(iteration, id) |> # IDの割当用
   dplyr::group_by(iteration, value) |> # IDの割当・カウント用
   dplyr::mutate(
     # タイル用
@@ -288,55 +287,19 @@ count_df <- tidyr::expand_grid(
   dplyr::ungroup() |> 
   dplyr::filter(iteration >= id) # カウント済みの要素を抽出
 
-# インデックスの小さい順に要素を入れ替えて戻す
-swap_df <- tidyr::expand_grid(
-  iteration = (N+1):(2*N+1), # 入替時の試行回数
-  id        = 1:N # 元のインデックス
-) |> 
-  dplyr::mutate(
-    # 数列用
-    value = a[id], 
-    # タイル用
-    y         = 0.5 * value, 
-    height    = value, 
-    alpha     = 1, 
-    linetype  = "solid", 
-    # ラベル用
-    label_y = 0
-  ) |> 
-  dplyr::arrange(iteration, value, id) |> # 入替用
-  dplyr::group_by(iteration) |> # 入替用
-  dplyr::mutate(
-    # タイル用
-    index = dplyr::row_number(), # 入替後のインデックス
-    x     = index
-  ) |> 
-  dplyr::arrange(iteration, id) |> # IDの割当用
-  dplyr::group_by(iteration, value) |> # IDの割当用
-  dplyr::mutate(
-    # 重複ラベル用
-    dup_id    = dplyr::row_number(id), # 重複IDを割り当て
-    dup_num   = max(dup_id), # 重複の判定用
-    dup_label = dplyr::if_else(
-      condition = dup_num > 1, true = paste0("(", dup_id, ")"), false = ""
-    ) # 重複要素のみラベルを作成
-  ) |> 
-  dplyr::ungroup() |> 
-  dplyr::filter(iteration-(N+1) >= N+1-id) # 入替済みの要素を抽出
-
 # インデックスの小さい順に要素を戻してカウント
 discount_df <- tidyr::expand_grid(
-  iteration = (N+1):(2*N+1), # 入替時の試行回数
+  iteration = 0:N + N+1, # 入替時の試行回数
   id        = 1:N # 元のインデックス
-) |> 
+) |> # 試行ごとに要素IDを複製
   dplyr::mutate(
     # 数列用
     value = a[id], 
     # タイル用
-    y         = -0.5, 
-    height    = 1, 
-    alpha     = 0.1, 
-    linetype  = "dashed", 
+    y        = -0.5, 
+    height   = 1, 
+    alpha    = 0.1, 
+    linetype = "dashed", 
     # ラベル用
     label_y = y - 0.5
   ) |> 
@@ -346,7 +309,7 @@ discount_df <- tidyr::expand_grid(
     # タイル用
     x = dplyr::row_number() # 累積要素数
   ) |> 
-  dplyr::arrange(iteration, id) |> # IDの割当用
+  dplyr::arrange(iteration, id) |> 
   dplyr::group_by(iteration, value) |> # IDの割当用
   dplyr::mutate(
     # 重複ラベル用
@@ -358,6 +321,42 @@ discount_df <- tidyr::expand_grid(
   ) |> 
   dplyr::ungroup() |> 
   dplyr::filter(iteration-(N+1) < N+1-id) # 未入替の要素を抽出
+
+# インデックスの小さい順に要素を入れ替えて戻す
+swap_df <- tidyr::expand_grid(
+  iteration = 0:N + N+1, # 入替時の試行回数
+  id        = 1:N # 元のインデックス
+) |> # 試行ごとに要素IDを複製
+  dplyr::mutate(
+    # 数列用
+    value = a[id], 
+    # タイル用
+    y        = 0.5 * value, 
+    height   = value, 
+    alpha    = 1, 
+    linetype = "blank", 
+    # ラベル用
+    label_y = 0
+  ) |> 
+  dplyr::arrange(iteration, value, id) |> # 入替用
+  dplyr::group_by(iteration) |> # 入替用
+  dplyr::mutate(
+    # タイル用
+    index = dplyr::row_number(), # 入替後のインデックス
+    x     = index
+  ) |> 
+  dplyr::arrange(iteration, id) |> 
+  dplyr::group_by(iteration, value) |> # IDの割当用
+  dplyr::mutate(
+    # 重複ラベル用
+    dup_id    = dplyr::row_number(id), # 重複IDを割り当て
+    dup_num   = max(dup_id), # 重複の判定用
+    dup_label = dplyr::if_else(
+      condition = dup_num > 1, true = paste0("(", dup_id, ")"), false = ""
+    ) # 重複要素のみラベルを作成
+  ) |> 
+  dplyr::ungroup() |> 
+  dplyr::filter(iteration-(N+1) >= N+1-id) # 入替済みの要素を抽出
 
 # データを結合
 trace_df <- dplyr::bind_rows(
@@ -398,7 +397,7 @@ graph <- ggplot() +
 
 # フレーム数を取得
 frame_num <- trace_df[["iteration"]] |> 
-  (\(val) {max(val) + 1})()
+  (\(vec) {max(vec) + 1})()
 
 # 1試行当たりのフレーム数を指定
 s <- 20
