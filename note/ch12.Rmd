@@ -25,6 +25,7 @@ knitr::opts_chunk$set(
 - 2023.08.16：「挿入ソート」を追加
 - 2023.08.20：「マージソート」を追加
 - 2023.08.30：「バケットソート」を追加
+- 2023.09.02：「クイックソート」を追加
 
 ----
 
@@ -456,10 +457,10 @@ library(ggplot2)
 
 ## ソートの実装
 
-　まずは、挿入ソートのアルゴリズムを関数として実装します。  
+　まずは、マージソートのアルゴリズムを関数として実装します。  
 <br>
 
-　挿入ソートを実装します。
+　マージソートを実装します。
 
 ```{r}
 # マージソートの実装
@@ -517,7 +518,7 @@ merge_sort <- function(vec) {
 　`vec` の要素数を `r` とします。また、`l` を `1` としておきます。（数列全体を見た際のlからrの範囲に対応した変数名です。ここでは一部だけを扱っているので1とnの方が分かりやすいかもしれません。）  
 　`vec` (`l` から `r` の範囲)をさらに分割する位置(インデックス)を `m` とします。  
 
-　「`l` 番目から `m` 番目までの要素」と「`m+1` 番目から `r` 番目までの要素」をそれぞれ `merge_sort()` でソートします。  
+　「`l` 番目から `m` 番目までの要素」と「`m+1` 番目から `r` 番目までの要素」に分割してそれぞれ `merge_sort()` でソートします。  
 　2つに分割したうち、「前(1から)の方はそのまま」で「後(m+1から)の方は逆順」にして結合したベクトルを一時変数 `buf` とします。`1` から `m` 番目までは昇順、`m+1` から `r` 番目までは降順に並んだ状態です。  
 　頭と尻の要素の大小を(勝ち抜け戦の要領で)比較して、小さい順に取り出して `vec` に格納していきます。  
 
@@ -541,7 +542,7 @@ a
 
 　乱数生成関数 `sample()` などで数値ベクトルを生成します。  
 
-　挿入ソートにより並べ替えます。
+　マージソートにより並べ替えます。
 
 ```{r}
 # ソート
@@ -561,7 +562,7 @@ sum(!(merge_sort(a) == sort(a)))
 
 ## ソートの可視化
 
-　次は、挿入ソートのアルゴリズムをグラフで確認します。  
+　次は、マージソートのアルゴリズムをグラフで確認します。  
 <br>
 
 　数列の初期値を作成して、グラフで確認します。  
@@ -695,7 +696,7 @@ trace_idx_mat[, 1:5]
 　最後の行は、全ての要素が `1` になり、1要素ずつに分割された状態を表し、また併合されていない状態(数列の初期値)を表します。  
 <br>
 
-　1データずつ入れ替え処理を行い、数列を記録します。
+　1試行ずつ入れ替え処理を行い、数列を記録します。
 
 ```{r}
 # 試行回数を取得:(初期値は除く)
@@ -870,11 +871,12 @@ ggplot() +
 ```
 
 　`facet_wrap()` で、試行(`iteration` 列)ごとに分割して棒グラフを描画します。  
-　要素の入れ替えが行われる(分割された)範囲を `geom_tile()` で描画します。（`geom_bar()` を使って範囲を描画しようとすると、描画自体はできるのですが、`width` 引数について警告文が出たので避けました。原因は不明です。）  
+　要素の入れ替えが行われた(分割された)範囲を `geom_tile()` で描画します。（`geom_bar()` を使って範囲を描画しようとすると、描画自体はできるのですが、`width` 引数について警告文が出たので避けました。原因は不明です。）  
 
 　初期値を0回目として、各試行における「入れ替え後の数列」をそれぞれ棒グラフ(バー)で表します。  
-　i回目の試行(i+1枚目のグラフ)において、入れ替えの行われる(分割された)範囲を赤色の破線の枠で示します。  
-　各枠内の要素(バー)が昇順に並んでいて、隣り合う枠(範囲)が併合しながら全体がソートされるのが分かります。  
+　i回目の試行(i+1枚目のグラフ)において、入れ替えの行われた(分割された)範囲を赤色の破線の枠で示します。  
+
+　各グラフを見ると、枠内の要素(バー)が昇順に並んでいるのが分かります。また次のグラフを見ると、隣り合う枠(範囲)を併合しながら全体がソートされるのが分かります。  
 <br>
 
 　各試行の数列のグラフを切り替えて推移を確認します。  
@@ -963,7 +965,7 @@ graph <- ggplot() +
        fill = "value", 
        x = "index", y = "value")
 
-# 1試行当たりのフレーム数を指定
+# 遷移フレーム数を指定
 s <- 20
 
 # gif画像を作成
@@ -979,7 +981,8 @@ gganimate::animate(
 　`animate()` の `plot` 引数にグラフオブジェクト、`nframes` 引数にフレーム数を指定して、gif画像を作成します。  
 　初期値を含むため試行回数は `max_iter+1` (`trace_idx_mat` の行数)です。`transition_states()` でアニメーションを作成すると、フレーム間の値を補完して、状態の遷移を描画します。遷移のフレームを `s` として、試行回数の `s` 倍の値を `nframes` 引数に指定します。  
 
-　分割された範囲が併合する度にソートされるのを確認できます。また、重複要素の順序が入れ替わらない(安定性・stable性)も確認できます。  
+　分割された範囲が併合する度にソートされるのを確認できます。  
+　また、重複要素の順序が入れ替わらない(安定性・stable性)のも分かります。  
 
 　ここでの試行回数(iterationの値)は、この可視化方法における試行番号(作図処理上の値)であり他の手法と対応していません。  
 <br>
@@ -990,17 +993,633 @@ gganimate::animate(
 
 # 12.5 クイックソートの実装と可視化
 
+　クイックソート(quick sort)を実装します。また、ソートの推移のアニメーションを作成して、アルゴリズムを確認します。  
+<br>
 
+　利用するパッケージを読み込みます。
 
-　この記事では、クイックソートを実装しました。次の記事では、ヒープソートを実装します。  
+```{r, eval=FALSE}
+# 利用パッケージ
+library(tidyverse)
+library(patchwork)
+library(gganimate)
+```
+
+```{r, echo=FALSE}
+### 資料作成用
+
+# チェック用
+library(ggplot2)
+```
+
+　この記事では、基本的に `パッケージ名::関数名()` の記法を使っているので、パッケージを読み込む必要はありません。ただし、作図コードについてはパッケージ名を省略しているので、`ggplot2` を読み込む必要があります。  
+　また、ネイティブパイプ演算子 `|>` を使っています。`magrittr` パッケージのパイプ演算子 %>% に置き換えても処理できますが、その場合は `magrittr` を読み込む必要があります。  
+
+　「ソートの可視化」において、`patchwork` パッケージを利用して複数のグラフを並べて描画、`gganimate` パッケージを利用してアニメーション(gif画像)を作成します。ソートの実装自体には使いません。  
 <br>
 
 
-# 12.6 ヒープソートの実装と可視化
+## ソートの実装
+
+　まずは、クイックソートのアルゴリズムを関数として実装します。  
+<br>
+
+　クイックソートを実装します。
+
+```{r}
+# クイックソートの実装
+quick_sort <- function(vec) {
+  
+  # 入替範囲の要素数を取得
+  l <- 1
+  r <- length(vec)
+  
+  # 要素数が1なら再帰処理を終了
+  if(r == 1) return(vec)
+  
+  # ピボットを設定
+  p_idx <- (l + r) %/% 2 # (中点)
+  p_val <- vec[p_idx]
+  
+  # ピボットを最後尾と入替
+  vec[p_idx] <- vec[r]
+  vec[r]     <- p_val
+  
+  # ピボット未満の値を探索:(j < r)
+  i <- l
+  for(j in l:(r-1)) { # (ピボットを除く)
+    if(vec[j] < p_val) {
+      
+      # i番目とj番目の値を入替
+      vec[l:r] <- replace(x = vec, list = c(i, j), values = vec[c(j, i)])
+      
+      # 境界位置を更新
+      i <- i + 1
+    }
+  }
+  
+  # ピボットを境界と入替
+  vec[r] <- vec[i]
+  vec[i] <- p_val
+  
+  # ピボット前後で分割してソート
+  vec[l:(i-1)] <- quick_sort(vec[l:(i-1)])
+  if(i < r) { # (境界が最後尾なら不要)
+    vec[(i+1):r] <- quick_sort(vec[(i+1):r])
+  }
+  
+  # 数列を出力
+  return(vec)
+}
+```
+
+　ソート対象の数列のうち、分割された一部(入替範囲内)の要素を `vec` として受け取ります。  
+　`vec` の要素数を `r` とします。また、`l` を `1` としておきます。（数列全体を見た際のlからrの範囲に対応した変数名です。ここでは一部だけを扱っているので1とnの方が分かりやすいかもしれません。）  
+　`vec` (`l` から `r` の範囲)の要素からピボットを1つ決めます。この例では中点とします。ピボットのインデックスを `p_idx`、値を `p_val` とします。  
+
+　範囲内の最後(r番目)の要素とピボットの要素を入れ替えて、範囲内の一番後ろにピボットの要素を配置します。  
+　範囲内の最初(l番目)の要素から順番にピボットの値と比較して、小さければ `i` 番目の要素と入れ換えて、範囲内の前方にピボット未満の要素を配置していきます。要素を入れ替える(ピボット未満の要素が見付かる)と、`i` に `1` を加えます。`i` の初期値を `l` にしておくことで、`i` は「前方に集められたピボット未満の要素」の次の要素のインデックスになります。  
+　全ての要素を比較したら、`i` 番目の要素とピボットの要素を入れ替えます。入れ替え後のピボット位置は、ピボット未満の要素とピボット以上の要素の境界になります。  
+
+　「`l` 番目から `i-1` 番目まで(境界より前)の要素」と「`i+1` 番目から `r` 番目まで(境界より後)の要素」に分割してそれぞれ `quick_sort()` でソートします。  
+　`quick_sort()` を実行すると内部でさらに(全ての分割範囲が1になるまで再帰的に) `quick_sort()` が実行され、ピボットの設定と分割(ソート)が繰り返されて、全体がソートされます。  
+
+　アルゴリズムの詳しい解説は、本のcode 12.3などを参照してください。  
+<br>
+
+　実装した関数を試してみます。  
+
+　要素数を指定して、数列を作成します。
+
+```{r}
+# 要素数を指定
+N <- 50
+
+# 数列を生成
+a <- sample(x = 1:(2*N), size = N, replace = TRUE)
+a
+```
+
+　乱数生成関数 `sample()` などで数値ベクトルを生成します。  
+
+　クイックソートにより並べ替えます。
+
+```{r}
+# ソート
+quick_sort(a)
+```
+
+　目で確認するのはアレなので、組み込み関数のソート結果と比較して確認します。
+
+```{r}
+# 確認
+sum(!(quick_sort(a) == sort(a)))
+```
+
+　`!` で `TRUE, FALSE` を反転させて `sum()` で合計することで、一致しない要素数を得られます。結果が `0` であれば全ての要素が一致したことが分かります。  
+<br>
 
 
+## ソートの可視化
 
-　この記事では、ヒープソートを実装しました。次の記事では、バケットソートを実装します。  
+　次は、クイックソートのアルゴリズムをグラフで確認します。  
+<br>
+
+　数列の初期値を作成して、グラフで確認します。  
+
+　要素数を指定して、数列を作成します。
+
+```{r}
+# 要素数を指定
+N <- 50
+
+# 数列を生成
+a <- rnorm(n = N, mean = 0, sd = 2) |> 
+  round(digits = 1)
+table(a)
+```
+
+　この例では、(負の値を含めるため)正規乱数生成関数 `rnorm()` で値を生成して、(重複を含めるため)丸め込み関数 `round()` で小数第一位にしておきます。  
+
+　数列をデータフレームに格納します。  
+
+```{r}
+# 要素数を取得
+N <- length(a)
+
+# 数列の初期値を格納
+tmp_df <- tibble::tibble(
+  iteration = 0,   # 試行回数
+  id        = 1:N, # 元のインデックス
+  index     = 1:N, # 各試行のインデックス
+  value     = a,   # 数列
+  pivot_flag       = FALSE, # 各試行のピボット
+  trace_pivot_flag = FALSE  # 各試行までのピボット
+)
+tmp_df
+```
+
+　作図用に、インデックスなどの値とあわせて数列を格納します。数列のみが与えられている場合は、要素数を `N` とします。  
+
+　数列を棒グラフで確認します。
+
+```{r, fig.width=8, fig.height=6, dpi=100}
+# 数列を作図
+ggplot() + 
+  geom_bar(data = tmp_df, 
+           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + 
+  theme(panel.grid.minor.x = element_blank()) + 
+  labs(title = "numerical sequence", 
+       subtitle = paste0("iteration: ", unique(tmp_df[["iteration"]])), 
+       fill = "value", 
+       x = "index", y = "value")
+```
+
+　この要素(バー)を昇順に並べ替えます。  
+<br>
+
+　アルゴリズムに従いソートを行って、作図用のデータを作成します。  
+　この例では、数列の全ての範囲に対してピボットの設定と分割を行う処理を1試行とします。再帰的な処理を行うと次の試行になります。ただし実際(関数内部)の処理では、1試行の処理が全て終わる前に再帰処理が行われることもあります。  
+
+　数列の入れ替え時に、値と共にインデックスも入れ替えて出力する関数を定義しておきます。
+
+```{r}
+# ピボットの設定の実装
+pivot_split <- function(value, index, left, right) {
+  
+  # 全体の要素数を取得
+  val_vec <- value
+  idx_vec <- index
+  N       <- length(val_vec)
+  
+  # 分割範囲を取得
+  l <- left
+  r <- right
+  
+  # 分割範囲の要素数が1なら終了
+  if(r - l < 1) {
+    
+    # リストに格納
+    lt <- list(value = val_vec, index = idx_vec, new_index = l, pivot_index = l)
+    
+    # 結果を出力
+    return(lt)
+  }
+  
+  # ピボットを設定
+  p_idx <- (l + r) %/% 2 # (中点で固定)
+  p_val <- val_vec[p_idx]
+  
+  # ピボットを最後尾と入替
+  val_vec[1:N] <- replace(x = val_vec, list = c(p_idx, r), values = c(val_vec[r], p_val))
+  idx_vec[1:N] <- replace(x = idx_vec, list = c(p_idx, r), values = idx_vec[c(r, p_idx)])
+  
+  # ピボット未満の値を探索:(j < r)
+  i <- l
+  for(j in l:(r-1)) { # (ピボットを除く)
+    if(val_vec[j] < p_val) {
+      
+      # j番目を境界と入替
+      val_vec[1:N] <- replace(x = val_vec, list = c(i, j), values = val_vec[c(j, i)])
+      idx_vec[1:N] <- replace(x = idx_vec, list = c(i, j), values = idx_vec[c(j, i)])
+      
+      # 境界位置をカウント
+      i <- i + 1
+    }
+  }
+  
+  # ピボットを境界と入替
+  val_vec[1:N] <- replace(x = val_vec, list = c(r, i), values = c(val_vec[i], p_val))
+  idx_vec[1:N] <- replace(x = idx_vec, list = c(r, i), values = idx_vec[c(i, r)])
+  
+  # リストに格納
+  lt <- list(value = val_vec, index = idx_vec, new_index = i, old_index = p_idx)
+  
+  # 結果を出力
+  return(lt)
+}
+```
+
+　数列全体と入替範囲のインデックスを受け取り、`quick_sort()` と同様にピボットの設定と入れ替えを行い、作図用の値を出力します。再帰処理は行いません。  
+　作図用の値として、「数列の値・インデックス」のベクトルと「ピボットの入れ替え前後のインデックス」の値をリストに格納して出力します。  
+<br>
+
+　1試行ずつ入れ替え処理を行い、数列を記録します。
+
+```{r}
+# 作図用のオブジェクトを初期化
+id_vec          <- 1:N
+trace_pivot_vec <- rep(NA, times = N)
+trace_df        <- tmp_df
+
+# 試行回数を初期化
+iter <- 0
+
+# クイックソート
+loop_flag <- TRUE
+while(loop_flag) {
+  
+  # 試行回数をカウント
+  iter <- iter + 1
+  
+  # 前回までのピボット位置を取得
+  range_idx_vec <- trace_pivot_vec |> 
+    (\(vec) {vec[!is.na(vec)]})() |> # 欠損値を除去
+    (\(vec) {c(0, vec, N+1)})() # 範囲計算用の値を追加
+  
+  # 分割数(前回までのピボット数+1)を取得
+  max_cnt <- length(range_idx_vec) - 1
+  
+  # 前回のピボット値を初期化
+  pivot_val_vec <- rep(NA, times = N)
+  
+  # 分割範囲ごとに処理
+  for(pivot_cnt in 1:max_cnt) {
+    
+    # 分割範囲を取得
+    l <- range_idx_vec[pivot_cnt] + 1
+    r <- range_idx_vec[pivot_cnt+1] - 1
+    
+    # 範囲がない(ピボットが隣り合う)なら次の範囲に移行
+    if(l > r) next
+    
+    # ピボットを設定
+    res_lt <- pivot_split(value = a, index = id_vec, left = l, right = r)
+    a[1:N]      <- res_lt[["value"]] # ピボット前後に整理した数列
+    id_vec[1:N] <- res_lt[["index"]] # 元のインデックス
+    i     <- res_lt[["new_index"]] # 移動後のピボット位置
+    #p_idx <- res_lt[["old_index"]] # 移動前のピボット位置
+    
+    # ピボットを格納
+    pivot_val_vec[i]   <- a[i]
+    trace_pivot_vec[i] <- i
+  }
+  
+  # 全要素にピボットが割り当てられたら終了
+  if(all(!is.na(trace_pivot_vec))) loop_flag <- FALSE
+  
+  # 数列とピボットを格納
+  tmp_df <- tibble::tibble(
+    iteration = iter, 
+    id        = id_vec, 
+    index     = 1:N, 
+    value     = a, 
+    pivot_flag       = !is.na(pivot_val_vec), # 今回のピボット
+    trace_pivot_flag = !is.na(trace_pivot_vec) # 今回までのピボット
+  )
+  
+  # 数列とピボットを記録
+  trace_df <- dplyr::bind_rows(trace_df, tmp_df)
+  
+  # 途中経過を表示
+  #print(paste0("--- iteration:", iter, " ---"))
+  #print(a)
+}
+```
+
+　各試行でピボットに設定された要素のインデックスを `trace_pivot_vec` に格納していきます。初期値を全て欠損値 `NA` にしておき、全ての要素がピボットに設定される(欠損値がなくなる)とループを終了します。  
+　各試行の始めに、`trace_pivot_vec` に格納されている値を取り出し(欠損値を取り除き)、頭に `0` と尻に `N+1` を追加したベクトルを `range_idx_vec` とします。  
+　`range_idx_vec` の最後を除く値+1(右隣)が分割範囲の左端のインデックス `l`、最初を除く値-1(左隣)が右端のインデックス `r` に対応します。よって、`range_idx_vec` の要素数―1回繰り返し処理を行います。ただし、`l, r` が隣り合う要素の場合は、処理を行わずに次の範囲に移ります。  
+
+　`pivot_split()` で各範囲のピボットの設定と要素の入れ替えを行います。  
+　数列 `a` の初期値のインデックス(`1` から `N` の整数)を `id_vec` としておき、`a` の要素の入れ替えに対応するように `id_vec` の要素も入れ替えます。  
+
+　試行ごとに、数列やインデックスをデータフレームに保存します。  
+　その試行でピボット設定された要素は `pivot_flag` 列を `TRUE`、その試行までにピボット設定された要素は `trace_pivot_flag` 列を `TRUE` にします。（ここの扱いをもう少し上手くやると作図処理が楽になる気がしますが、力尽きました。）  
+<br>
+
+　初期値のときのコードで、ソートした数列をグラフで確認します。
+
+```{r, echo=FALSE, fig.width=8, fig.height=6, dpi=100}
+### 資料作成用:(再掲)
+
+# 数列を作図
+ggplot() + 
+  geom_bar(data = tmp_df, 
+           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + 
+  theme(panel.grid.minor.x = element_blank()) + # 図の体裁
+  labs(title = "numerical sequence", 
+       subtitle = paste0("iteration: ", unique(tmp_df[["iteration"]])), 
+       fill = "value", 
+       x = "index", y = "value")
+```
+
+　昇順に並んでいるのが分かります。  
+<br>
+
+　各試行の数列のグラフを並べて推移を確認します。  
+
+　ピボットの位置の描画用のデータフレームを作成します。
+
+```{r}
+# ピボット位置を作成
+pivot_idx_df <- trace_df |> 
+  dplyr::filter(pivot_flag) # 各試行のピボットデータを抽出
+pivot_idx_df
+```
+
+　各試行においてピボットに設定された要素(`pivot_flag` 列が `TRUE` の行)を取り出します。  
+
+　分割範囲(入替範囲)の描画用のデータフレームを作成します。
+
+```{r}
+# 分割範囲を作成
+range_df <- trace_df |> 
+  # 範囲計算用の値を追加
+  tibble::add_row(
+    tidyr::expand_grid(
+      iteration = 0:max(trace_df[["iteration"]]), 
+      index     = c(0, N+1)
+    ) |> # 全ての組み合わせを作成
+      dplyr::mutate(
+        pivot_flag       = FALSE, 
+        trace_pivot_flag = TRUE
+      )
+  ) |> 
+  dplyr::filter(trace_pivot_flag) |> # ピボット済みデータを抽出
+  dplyr::arrange(iteration, index) |> # 値の計算用
+  dplyr::group_by(iteration) |> # 値の計算用
+  # 作図用の値を計算
+  dplyr::mutate(
+    iteration = iteration + 1, 
+    left   = index + 1, 
+    right  = dplyr::lead(index, n = 1) - 1, 
+    x      = 0.5 * (left + right), 
+    y      = 0.5 * (max(a) + min(c(0, a))), 
+    width  = right - left + 1, 
+    height = max(a) - min(c(0, a)) + 1
+  ) |> 
+  dplyr::ungroup() |> 
+  dplyr::filter(width >= 1) |> 
+  dplyr::select(iteration, left, right, x, y, width, height) |> 
+  # ピボットデータを追加
+  tibble::add_column(
+    pivot_idx_df |> 
+      dplyr::select(id, index, value)
+  )
+range_df
+```
+
+　分割位置の計算用に、初期値(0番目の試行)を含めた各試行のインデックスに `0` と `N+1` を追加します。  
+
+　各試行までにピボット設定された要素(`trace_pivot_flag` 列が `TRUE` の行)を取り出します。抽出されたデータの `index` 列がピボット設定済みの位置を表します。  
+　分割範囲の左端の位置lは、0・ピボット位置の右隣なので、`index` 列+1です。また、右端の位置rは、ピボット位置・N+1の左隣なので、`index` 列を `lead()` で1行前にズラした-1です。  
+　ピボット設定済みの要素が隣り合う場合は、分割範囲が存在しないので、lとr(`left` 列と `right` 列)の差が0の行を取り除きます。  
+
+　1試行分タイミングを遅らせて(`iteration` 列に `1` を足して)データを作成します。最後の試行では全ての要素がピボット済み(隣り合う)なので除去されています。  
+　インデックス列が範囲計算用の値なので削除して、ピボットのインデックスと値の列を追加します。  
+
+　ピボットの値の描画用のデータフレームを作成します。
+
+```{r}
+# ピボット値を作成
+pivot_val_df <- dplyr::bind_cols(
+  pivot_idx_df,   # ピボット位置
+  range_df |> # 入替範囲
+    dplyr::select(left, right)
+) |> 
+  # 作図用に値を調整
+  dplyr::mutate(
+    left = left - 0.5, 
+    right = right + 0.5
+  )
+pivot_val_df
+```
+
+　各試行におけるピボット位置と分割範囲のデータを結合します。分割範囲のインデックス(x軸の値)を枠線の位置(x軸の値)に対応するように調整します。  
+
+　試行ごとに数列のグラフを作成します。
+
+```{r, fig.width=20, fig.height=15, dpi=100}
+# 全試行の数列を作図
+ggplot() + 
+  geom_bar(data = trace_df, 
+           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + # 全ての要素
+  geom_tile(data = range_df,
+            mapping = aes(x = x, y = y, width = width, height = height, 
+                          color = factor(value), fill = factor(value), group = factor(id)),
+            alpha = 0.1, linewidth = 0.6, linetype = "dashed", show.legend = FALSE) + # 入替範囲
+  geom_vline(data = pivot_idx_df, 
+             mapping = aes(xintercept = index, color = factor(value)), 
+             linewidth = 0.6, linetype = "dotted", show.legend = FALSE)  + # ピボットの位置
+  geom_segment(data = pivot_val_df, 
+               mapping = aes(x = left, y = value, xend = right, yend = value), 
+               color = "red", linewidth = 0.6, linetype = "twodash", show.legend = FALSE)  + # ピボットまでの上限値
+  facet_wrap(iteration ~ ., scales = "free_x", labeller = label_both) + # 試行ごとに分割
+  theme(panel.grid.minor.x = element_blank(), 
+        legend.position = "none") + 
+  labs(title = "quick sort", 
+       fill = "value", 
+       x = "index", y = "value")
+```
+
+　`facet_wrap()` で、試行(`iteration` 列)ごとに分割して棒グラフを描画します。  
+　要素の入れ替えが行われた(分割された)範囲を `geom_tile()` で描画します。（`geom_bar()` を使って範囲を描画しようとすると、描画自体はできるのですが、`width` 引数について警告文が出たので避けました。原因は不明です。）  
+
+　初期値を0回目として、各試行における「入れ替え後の数列」をそれぞれ棒グラフ(バー)で表します。  
+　i回目の試行(i+1枚目のグラフ)において、入れ替えの行われた(分割された)範囲を破線の枠、入れ替え後のピボットの位置を点線の垂直線、ピボットの値を赤色の水平線で示します。枠の色と水平線の高さはピボットの値に対応します。  
+
+　各グラフを見ると、枠内の要素(バー)がピボットを境界に「ピボット未満の要素が左側」で「ピボット以上の要素が右側」に配置されているのが分かります。また次のグラフを見ると、ピボットの前後を分割しながら全体がソートされるのが分かります。  
+<br>
+
+　各試行の数列のグラフを切り替えて推移を確認します。  
+
+　各試行までのピボットの位置の描画用のデータフレームを作成します。
+
+```{r}
+# ピボットの推移を作成
+trace_pivot_df <- dplyr::bind_rows(
+  # 各試行のピボットデータ
+  trace_df |> 
+    dplyr::arrange(iteration, index) |> # フレーム調整用
+    dplyr::group_by(id) |> # フレーム調整用
+    dplyr::mutate(
+      pivot_flag = dplyr::lead(pivot_flag, n = 1, default = FALSE)
+    ) |> # (表示フレームの調整用に)ピボット割り当て試行を1つ前に変更
+    dplyr::ungroup() |> 
+    dplyr::filter(pivot_flag) |> # 各試行のピボットデータを抽出
+    dplyr::mutate(
+      type = "dashed"
+    ), 
+  # 過去のピボットデータ
+  trace_df |> 
+    dplyr::filter(trace_pivot_flag) |> # 過去試行のピボットデータを抽出
+    dplyr::mutate(
+      type = "dotted"
+    )
+) |> 
+  dplyr::arrange(iteration, index)
+trace_pivot_df
+```
+
+　各試行においてピボットに設定された要素(`pivot_flag` 列が `TRUE` の行)と、各試行までにピボットに設定された要素(`trace_pivot_flag` 列が `TRUE` の行)をそれぞれ取り出して結合します。  
+　`trace_df` は、各試行における入れ替え後のデータを格納しています。入れ替え前の(1つ前の試行のフレームに)ピボット位置を表示するために、要素ごとに(`id` 列でグループ化して)、ピボットの設定フラグを `lead()` で1つ前の試行(1行前)にズラしてから抽出します。  
+　各試行のピボットと過去のピボットを描き分けるために、線の種類を指定しておきます。  
+
+　分割範囲(入替範囲)の描画用のデータフレームを作成します。
+
+```{r}
+# 分割範囲を作成
+range_df <- trace_df |> 
+  # 範囲計算用の値を追加
+  tibble::add_row(
+    tidyr::expand_grid(
+      iteration = 0:max(trace_df[["iteration"]]), 
+      index     = c(0, N+1)
+    ) |> # 全ての組み合わせを作成
+      dplyr::mutate(
+        pivot_flag       = FALSE, 
+        trace_pivot_flag = TRUE
+      )
+  ) |> 
+  dplyr::filter(trace_pivot_flag) |> # ピボット済みデータを抽出
+  dplyr::arrange(iteration, index) |> # 値の計算用
+  dplyr::group_by(iteration) |> # 値の計算用
+  # 作図用の値を計算
+  dplyr::mutate(
+    left   = index + 1, 
+    right  = dplyr::lead(index, n = 1) - 1, 
+    x      = 0.5 * (left + right), 
+    y      = 0.5 * (max(a) + min(c(0, a))), 
+    width  = right - left + 1, 
+    height = max(a) - min(c(0, a)) + 1
+  ) |> 
+  dplyr::ungroup() |> 
+  dplyr::filter(width >= 1) |> 
+  dplyr::select(iteration, left, right, x, y, width, height) |> 
+  # ピボットデータを追加
+  tibble::add_column(
+    trace_df |> 
+      dplyr::filter(pivot_flag) |> # 各試行のピボットデータを抽出
+      dplyr::select(id, index, value)
+  )
+range_df
+```
+
+　こちらは、試行回数を調整せずにデータを作成します。  
+
+　重複ラベルの描画用のデータフレームを作成します。
+
+```{r}
+# 重複ラベルを作成
+dup_label_df <- trace_df |> 
+  dplyr::arrange(iteration, id) |> # IDの割当用
+  dplyr::group_by(iteration, value) |> # IDの割当用
+  dplyr::mutate(
+    dup_id = dplyr::row_number(id), # 重複要素にIDを割り当て
+    dup_num = max(dup_id), # 重複の判定用
+    dup_label = dplyr::if_else(
+      condition = dup_num > 1, 
+      true = paste0("(", dup_id, ")"), 
+      false = ""
+    ) # 重複要素のみラベルを作成
+  ) |> 
+  dplyr::ungroup() |> 
+  dplyr::arrange(iteration, index)
+dup_label_df
+```
+
+　重複している値の要素にのみ、それぞれ通し番号のラベルを作成します。  
+
+　推移のアニメーションを作成します。
+
+```{r}
+# ソートのアニメーションを作図
+graph <- ggplot() + 
+  geom_tile(data = range_df,
+            mapping = aes(x = x, y = y, width = width, height = height, 
+                          color = factor(value), fill = factor(value), group = factor(id)),
+            alpha = 0.1, linewidth = 1, linetype = "dashed", show.legend = FALSE) + # 入替範囲
+  geom_vline(data = trace_pivot_df, 
+             mapping = aes(xintercept = index, 
+                           color = factor(value), linetype = type, group = factor(id)), 
+             linewidth = 1, show.legend = FALSE)  + # ピボット
+  geom_bar(data = trace_df, 
+           mapping = aes(x = index, y = value, fill = factor(value), group = factor(id)), 
+           stat = "identity") + # 全ての要素
+  geom_text(data = trace_df, 
+            mapping = aes(x = index, y = 0, label = as.character(value), group = factor(id)), 
+            vjust = -0.5, size = 5) + # 要素ラベル
+  geom_text(data = dup_label_df, 
+            mapping = aes(x = index, y = 0, label = dup_label, group = factor(id)), 
+            vjust = 1, size = 4) + # 重複ラベル
+  gganimate::transition_states(states = iteration, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
+  gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
+  scale_linetype_identity() + 
+  theme(panel.grid.minor.x = element_blank(), 
+        legend.position = "none") + 
+  labs(title = "quick sort", 
+       subtitle = "iteration : {next_state}", 
+       fill = "value", 
+       x = "index", y = "value")
+
+# フレーム数を設定
+frame_num <- max(trace_df[["iteration"]]) + 1
+
+# 遷移フレーム数を指定
+s <- 20
+
+# gif画像を作成
+gganimate::animate(
+  plot = graph, 
+  nframes = (frame_num + 2)*s, start_pause = s, end_pause = s, fps = 20, 
+  width = 1500, height = 1200, 
+  renderer = gganimate::gifski_renderer()
+)
+```
+
+　`transition_states()` のフレーム制御の引数 `states` に試行回数列 `iteration` を指定して、これまでと同様に作図します。  
+　`animate()` の `plot` 引数にグラフオブジェクト、`nframes` 引数にフレーム数を指定して、gif画像を作成します。  
+　初期値を含むため試行回数は最大値+1です。`transition_states()` でアニメーションを作成すると、フレーム間の値を補完して、状態の遷移を描画します。遷移(1試行当たり)のフレーム数を `s` として、試行回数の `s` 倍の値を `nframes` 引数に指定します。  
+
+　各試行におけるピボットを破線、過去の試行で設定されたピボット(ソート済みの要素)を点線の水平線で示します。  
+　分割範囲ごとにピボットが1つ設定され、ピボット未満の要素とピボット以上の要素に分けられ、ピボットの前後で分割する度にソートされるのを確認できます。  
+　また、重複要素の順序が入れ替わる(安定性・stable性がない)のも分かります。  
+
+　ここでの試行回数(iterationの値)は、この可視化方法における試行番号(作図処理上の値)であり他の手法と対応していません。  
+<br>
+
+　この記事では、クイックソートを実装しました。次の記事では、ヒープソートを実装します。  
 <br>
 
 
@@ -1037,7 +1656,7 @@ library(ggplot2)
 　まずは、バケットソートのアルゴリズムを関数として実装します。  
 <br>
 
-　挿入ソートを実装します。
+　バケットソートを実装します。
 
 ```{r}
 # バケットソートの実装
@@ -1140,7 +1759,7 @@ sum(!(bucket_sort(a, max_val) == sort(a)))
 
 ## ソートの可視化
 
-　次は、挿入ソートのアルゴリズムをグラフで確認します。  
+　次は、バケットソートのアルゴリズムをグラフで確認します。  
 <br>
 
 　数列の初期値を作成して、グラフで確認します。  
