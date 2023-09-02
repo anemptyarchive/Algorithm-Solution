@@ -125,9 +125,6 @@ trace_idx <- function(mat = NA, iter = 0, left = 1, right = 1) {
 }
 
 
-# 数列を指定
-#a <- c(12, 9, 15, 3, 8, 17, 6, 1)
-
 # 要素数を取得
 N <- length(a)
 
@@ -138,17 +135,6 @@ tmp_df <- tibble::tibble(
   index     = 1:N, # 各試行のインデックス
   value     = a    # 要素
 )
-
-# 数列を作図
-ggplot() + 
-  geom_bar(data = tmp_df, 
-           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + 
-  theme(panel.grid.minor.x = element_blank()) + # 図の体裁
-  labs(title = "numerical sequence", 
-       subtitle = paste0("iteration: ", unique(tmp_df[["iteration"]])), 
-       fill = "value", 
-       x = "index", y = "value")
-
 
 # 分割インデックスを作成
 trace_idx_mat <- trace_idx(mat = NA, iter = 0, left = 1, right = N)
@@ -239,47 +225,6 @@ for(i in 1:max_iter) {
 
 
 # 入替範囲を作成
-range_df <- trace_idx_mat[(max_iter+1):1, ] |> # (逆順に並べ替え)
-  tibble::as_tibble(.name_repair = NULL) |> 
-  tibble::add_column(iteration = 0:max_iter) |> # 試行回数列を追加
-  tidyr::pivot_longer(
-    cols = !iteration, 
-    names_to = "index", 
-    names_prefix = "V", 
-    names_transform = list(index = as.numeric), 
-    values_to = "split_flag"
-  ) |> # 分割インデックス列をまとめる
-  dplyr::filter(split_flag == 1) |> # 分割位置を抽出
-  dplyr::arrange(iteration, index) |> # 分割範囲の作成用
-  dplyr::group_by(iteration) |> # 分割範囲の作成用
-  dplyr::mutate(
-    # 分割範囲を作成
-    left  = index, 
-    right = dplyr::lead(index, n = 1, default = N+1), 
-    # タイル用
-    x      = 0.5 * (right + left - 1), 
-    y      = 0.5 * (max(a) + min(c(0, a))), 
-    width  = right - left, 
-    height = max(a) - min(c(0, a)) + 1
-  ) |> 
-  dplyr::ungroup()
-
-# 全試行の数列を作図
-ggplot() + 
-  geom_bar(data = trace_df, 
-           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + # 全ての要素
-  geom_tile(data = range_df,
-            mapping = aes(x = x, y = y, width = width, height = height),
-            color = "red", alpha = 0, linewidth = 0.6, linetype = "dashed") + # 入替範囲
-  facet_wrap(iteration ~ ., scales = "free_x", labeller = label_both) + # 試行ごとに分割
-  theme(panel.grid.minor.x = element_blank(), 
-        legend.position = "none") + 
-  labs(title = "merge sort", 
-       fill = "value", 
-       x = "index", y = "value")
-
-
-# 入替範囲を作成
 range_df <- trace_idx_mat[max_iter:1, ] |> # (最後を除き逆順に並べ替え)
   tibble::as_tibble(.name_repair = NULL) |> 
   tibble::add_column(iteration = 0:(max_iter-1)) |> # 試行回数列を追加
@@ -347,7 +292,7 @@ graph <- ggplot() +
        fill = "value", 
        x = "index", y = "value")
 
-# 1試行当たりのフレーム数を指定
+# 遷移フレーム数を指定
 s <- 20
 
 # gif画像を作成

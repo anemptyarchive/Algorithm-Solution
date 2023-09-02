@@ -14,7 +14,7 @@ library(ggplot2)
 # 挿入ソートの実装
 insertion_sort <- function(vec) {
   
-  # 要素数を取得
+  # 数列の要素数を取得
   N <- length(vec)
   
   # 要素ごとに処理
@@ -69,9 +69,6 @@ sum(!(insertion_sort(a) == sort(a)))
 
 # 可視化 ---------------------------------------------------------------------
 
-# 数列を指定
-#a <- c(4, 1, 3, 5, 2)
-
 # 要素数を取得
 N <- length(a)
 
@@ -82,17 +79,6 @@ tmp_df <- tibble::tibble(
   index     = 1:N, # 各試行のインデックス
   value     = a    # 要素
 )
-
-# 数列を作図
-ggplot() + 
-  geom_bar(data = tmp_df, 
-           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + 
-  theme(panel.grid.minor.x = element_blank()) + 
-  labs(title = "numerical sequence", 
-       subtitle = paste0("iteration: ", unique(tmp_df[["iteration"]])), 
-       fill = "value", 
-       x = "index", y = "value")
-
 
 # 作図用のオブジェクトを初期化
 id_vec   <- 1:N
@@ -151,31 +137,6 @@ for(i in 1:N) {
 
 # 挿入データを作成
 target_df <- trace_df |> 
-  dplyr::filter(iteration == id) # i番目の要素を抽出
-
-# 全試行の数列を作図
-ggplot() + 
-  geom_bar(data = trace_df, 
-           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + # 全ての要素
-  geom_bar(data = target_df,
-           mapping = aes(x = id, y = value), stat = "identity",
-           color = "red", alpha = 0, linewidth = 0.6, linetype = "dashed") + # 挿入前のi番目の要素
-  geom_bar(data = target_df,
-           mapping = aes(x = index, y = value), stat = "identity",
-           color = "red", alpha = 0, linewidth = 0.6, linetype = "dotted") + # 挿入後のi番目の要素
-  geom_segment(data = target_df, 
-               mapping = aes(x = id, y = value, xend = -Inf, yend = value, color = factor(value)), 
-               linewidth = 0.6, linetype = "dashed", show.legend = FALSE) + # 挿入データまでの上限値
-  facet_wrap(iteration ~ ., scales = "free_x", labeller = label_both) + # 試行ごとに分割
-  theme(panel.grid.minor.x = element_blank(), 
-        legend.position = "right") + 
-  labs(title = "insertion sort", 
-       fill = "value", 
-       x = "index", y = "value")
-
-
-# 挿入データを作成
-target_df <- trace_df |> 
     dplyr::filter((iteration + 1) == index) # i番目の要素を抽出
 
 # 重複ラベルを作成
@@ -221,7 +182,7 @@ graph <- ggplot() +
        fill = "value", 
        x = "index", y = "value")
 
-# 1試行当たりのフレーム数を指定
+# 遷移フレーム数を指定
 s <- 20
 
 # gif画像を作成

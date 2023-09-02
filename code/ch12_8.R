@@ -81,23 +81,6 @@ sum(!(bucket_sort(a) == sort(a)))
 
 # 可視化 ---------------------------------------------------------------------
 
-# 数列を格納
-seq_df <- tibble::tibble(
-  index = 1:N, # 各試行のインデックス
-  value = a    # 要素
-  #value = bucket_sort(a) # 要素
-)
-
-# 数列を作図
-ggplot() + 
-  geom_bar(data = seq_df, 
-           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + 
-  theme(panel.grid.minor.x = element_blank()) + # 図の体裁
-  labs(title = "numerical sequence", 
-       fill = "value", 
-       x = "index", y = "value")
-
-
 ### ・操作の確認 -----
 
 # 数列を格納
@@ -399,7 +382,7 @@ graph <- ggplot() +
 frame_num <- trace_df[["iteration"]] |> 
   (\(vec) {max(vec) + 1})()
 
-# 1試行当たりのフレーム数を指定
+# 遷移フレーム数を指定
 s <- 20
 
 # gif画像を作成
