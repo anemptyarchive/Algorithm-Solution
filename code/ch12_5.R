@@ -14,15 +14,15 @@ library(ggplot2)
 # クイックソートの実装
 quick_sort <- function(vec) {
   
-  # 要素数を取得
+  # 入替範囲の要素数を取得
   l <- 1
   r <- length(vec)
   
-  # 要素数が1なら再帰的に処理を終了
+  # 要素数が1なら再帰処理を終了
   if(r == 1) return(vec)
   
   # ピボットを設定
-  p_idx <- (l + r) %/% 2 # (中点で固定)
+  p_idx <- (l + r) %/% 2 # (中点)
   p_val <- vec[p_idx]
   
   # ピボットを最後尾と入替
@@ -34,8 +34,10 @@ quick_sort <- function(vec) {
   for(j in l:(r-1)) { # (ピボットを除く)
     if(vec[j] < p_val) {
       
-      # i番目とj番目の値と入替
+      # i番目とj番目の値を入替
       vec[l:r] <- replace(x = vec, list = c(i, j), values = vec[c(j, i)])
+      
+      # 境界位置を更新
       i <- i + 1
     }
   }
@@ -56,16 +58,17 @@ quick_sort <- function(vec) {
 
 
 # 要素数を指定
-N <- 100
+N <- 50
 
 # 数列を生成
 a <- sample(x = 1:(2*N), size = N, replace = TRUE)
-a <- rnorm(n = N, mean = 0, sd = 10) |> 
+a <- rnorm(n = N, mean = 0, sd = 1) |> 
   round(digits = 1)
 a
 
 # ソート
 quick_sort(a)
+sum(!(quick_sort(a) == sort(a)))
 
 
 # 可視化 ---------------------------------------------------------------------
@@ -127,11 +130,7 @@ pivot_split <- function(value, index, left, right) {
 
 
 # 要素数を指定
-N <- 20
-
-# 数列を生成
-a <- sample(x = 1:(N*2), size = N, replace = TRUE)
-a; table(a)
+N <- 50
 
 # 数列の初期値を格納
 tmp_df <- tibble::tibble(
@@ -142,17 +141,6 @@ tmp_df <- tibble::tibble(
   pivot_flag       = FALSE, # 各試行のピボット
   trace_pivot_flag = FALSE  # 各試行までのピボット
 )
-
-# 数列を作図
-ggplot() + 
-  geom_bar(data = tmp_df, 
-           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + 
-  theme(panel.grid.minor.x = element_blank()) + 
-  labs(title = "numerical sequence", 
-       subtitle = paste0("i = ", unique(tmp_df[["iteration"]])), 
-       fill = "value", 
-       x = "index", y = "value")
-
 
 # 作図用のオブジェクトを初期化
 id_vec          <- 1:N
@@ -192,10 +180,10 @@ while(loop_flag) {
     
     # ピボットを設定
     res_lt <- pivot_split(value = a, index = id_vec, left = l, right = r)
-    a[1:N] <- res_lt[["value"]]     # ピボット前後に整理した数列
-    id_vec <- res_lt[["index"]]     # 元のインデックス
-    i      <- res_lt[["new_index"]] # 移動後のピボット位置
-    p_idx  <- res_lt[["old_index"]] # 移動前のピボット位置
+    a[1:N]      <- res_lt[["value"]] # ピボット前後に整理した数列
+    id_vec[1:N] <- res_lt[["index"]] # 元のインデックス
+    i     <- res_lt[["new_index"]] # 移動後のピボット位置
+    #p_idx <- res_lt[["old_index"]] # 移動前のピボット位置
     
     # ピボットを格納
     pivot_val_vec[i]   <- a[i]
@@ -203,9 +191,7 @@ while(loop_flag) {
   }
   
   # 全要素にピボットが割り当てられたら終了
-  if(all(!is.na(trace_pivot_vec))) {
-    loop_flag <- FALSE
-  }
+  if(all(!is.na(trace_pivot_vec))) loop_flag <- FALSE
   
   # 数列とピボットを格納
   tmp_df <- tibble::tibble(
@@ -213,11 +199,9 @@ while(loop_flag) {
     id        = id_vec, 
     index     = 1:N, 
     value     = a, 
+    pivot_flag       = !is.na(pivot_val_vec), # 今回のピボット
     trace_pivot_flag = !is.na(trace_pivot_vec) # 今回までのピボット
-  ) |> 
-    dplyr::mutate(
-      pivot_flag = !is.na(pivot_val_vec) # 今回のピボット
-    )
+  )
   
   # 数列とピボットを記録
   trace_df <- dplyr::bind_rows(trace_df, tmp_df)
@@ -225,44 +209,24 @@ while(loop_flag) {
   # 途中経過を表示
   print(paste0("--- iteration:", iter, " ---"))
   print(a)
-  print(trace_pivot_vec)
 }
 
 
 # ピボットの推移を作成
-target_df <- trace_df |> 
-  dplyr::filter(pivot_flag) # 各試行のピボットデータを抽出
-
-# 全試行の数列を作図
-ggplot() + 
-  geom_bar(data = trace_df, 
-           mapping = aes(x = index, y = value, fill = factor(value)), stat = "identity") + # 全ての要素
-  geom_vline(data = target_df, 
-             mapping = aes(xintercept = index, color = factor(value)), 
-             linewidth = 0.6, linetype = "dashed", show.legend = FALSE)  + # ピボット
-  geom_hline(data = target_df, 
-             mapping = aes(yintercept = value, color = factor(value)), 
-             linewidth = 0.6, linetype = "dotted", show.legend = FALSE)  + # ピボットまでの上限値
-  facet_wrap(iteration ~ ., scales = "free_x", labeller = label_both) + # 試行ごとに分割
-  theme(panel.grid.minor.x = element_blank()) + 
-  labs(title = "quick sort", 
-       fill = "value", 
-       x = "index", y = "value")
-
-
-# ピボットの推移を作成
-target_pivot_df <- dplyr::bind_rows(
+trace_pivot_df <- dplyr::bind_rows(
+  # 各試行のピボットデータ
   trace_df |> 
     dplyr::arrange(iteration, index) |> # フレーム調整用
     dplyr::group_by(id) |> # フレーム調整用
     dplyr::mutate(
-      pivot_flag = dplyr::lead(pivot_flag, n = 1)
+      pivot_flag = dplyr::lead(pivot_flag, n = 1, default = FALSE)
     ) |> # (表示フレームの調整用に)ピボット割り当て試行を1つ前に変更
     dplyr::ungroup() |> 
     dplyr::filter(pivot_flag) |> # 各試行のピボットデータを抽出
     dplyr::mutate(
       type = "dashed"
     ), 
+  # 過去のピボットデータ
   trace_df |> 
     dplyr::filter(trace_pivot_flag) |> # 過去試行のピボットデータを抽出
     dplyr::mutate(
@@ -271,8 +235,8 @@ target_pivot_df <- dplyr::bind_rows(
 ) |> 
   dplyr::arrange(iteration, index)
 
-# 分割範囲の推移を作成
-target_range_df <- trace_df |> 
+# 分割範囲を作成
+range_df <- trace_df |> 
   # 範囲計算用の値を追加
   tibble::add_row(
     tidyr::expand_grid(
@@ -284,25 +248,25 @@ target_range_df <- trace_df |>
         trace_pivot_flag = TRUE
       )
   ) |> 
-  dplyr::filter(trace_pivot_flag) |> 
+  dplyr::filter(trace_pivot_flag) |> # ピボット済みデータを抽出
   dplyr::arrange(iteration, index) |> # 値の計算用
   dplyr::group_by(iteration) |> # 値の計算用
   # 作図用の値を計算
   dplyr::mutate(
-    iteration = iteration, 
     left   = index + 1, 
     right  = dplyr::lead(index, n = 1) - 1, 
     x      = 0.5 * (left + right), 
-    y      = 0.5 * max(a), 
+    y      = 0.5 * (max(a) + min(c(0, a))), 
     width  = right - left + 1, 
-    height = max(a) + 1
+    height = max(a) - min(c(0, a)) + 1
   ) |> 
   dplyr::ungroup() |> 
   dplyr::filter(width >= 1) |> 
   dplyr::select(iteration, left, right, x, y, width, height) |> 
   # ピボットデータを追加
   tibble::add_column(
-    target_df |> 
+    trace_df |> 
+      dplyr::filter(pivot_flag) |> # 各試行のピボットデータを抽出
       dplyr::select(id, index, value)
   )
 
@@ -324,28 +288,28 @@ dup_label_df <- trace_df |>
 
 # ソートのアニメーションを作図
 graph <- ggplot() + 
-  geom_bar(data = trace_df, 
-           mapping = aes(x = index, y = value, 
-                         fill = factor(value), group = factor(id)), 
-           stat = "identity") + # 全ての要素
-  geom_vline(data = target_pivot_df, 
+  geom_tile(data = range_df,
+            mapping = aes(x = x, y = y, width = width, height = height, 
+                          color = factor(value), fill = factor(value), group = factor(id)),
+            alpha = 0.1, linewidth = 1, linetype = "dashed", show.legend = FALSE) + # 入替範囲
+  geom_vline(data = trace_pivot_df, 
              mapping = aes(xintercept = index, 
                            color = factor(value), linetype = type, group = factor(id)), 
-             linewidth = 0.6, show.legend = FALSE)  + # ピボット
-  geom_tile(data = target_range_df,
-            mapping = aes(x = x, y = y, width = width, height = height, 
-                          color = factor(value), group = factor(id)),
-            alpha = 0, linewidth = 0.6, linetype = "dashed", show.legend = FALSE) + # 入替範囲
+             linewidth = 1, show.legend = FALSE)  + # ピボット
+  geom_bar(data = trace_df, 
+           mapping = aes(x = index, y = value, fill = factor(value), group = factor(id)), 
+           stat = "identity") + # 全ての要素
   geom_text(data = trace_df, 
             mapping = aes(x = index, y = 0, label = as.character(value), group = factor(id)), 
             vjust = -0.5, size = 5) + # 要素ラベル
   geom_text(data = dup_label_df, 
-            mapping = aes(x = index, y = 1.5, label = dup_label, group = factor(id)), 
-            vjust = -0.5, size = 5) + # 重複ラベル
+            mapping = aes(x = index, y = 0, label = dup_label, group = factor(id)), 
+            vjust = 1, size = 4) + # 重複ラベル
   gganimate::transition_states(states = iteration, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
   gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
   scale_linetype_identity() + 
-  theme(panel.grid.minor.x = element_blank()) + 
+  theme(panel.grid.minor.x = element_blank(), 
+        legend.position = "none") + 
   labs(title = "quick sort", 
        subtitle = "iteration : {next_state}", 
        fill = "value", 
@@ -354,17 +318,14 @@ graph <- ggplot() +
 # フレーム数を設定
 frame_num <- max(trace_df[["iteration"]]) + 1
 
-# 1試行当たりのフレーム数を指定
-s <- 10
-
-# 一時停止フレーム数を指定
-p <- 10
+# 遷移フレーム数を指定
+s <- 20
 
 # gif画像を作成
 gganimate::animate(
   plot = graph, 
-  nframes = (frame_num + 2*p)*s, start_pause = p, end_pause = p, fps = 40, 
-  width = 800, height = 600, 
+  nframes = (frame_num + 2)*s, start_pause = s, end_pause = s, fps = 20, 
+  width = 1500, height = 1200, 
   renderer = gganimate::gifski_renderer()
 )
 
