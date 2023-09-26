@@ -292,7 +292,7 @@ for(i in N:2) {
   
   ## ヒープ化操作(最大値の探索)
   
-  # 残りが1つならヒープ化不要
+  # 要素が1つならヒープ化不要
   if(i == 2) break
   
   # i-1番目までの要素をヒープ化(N-i+2個目の最大値を探索)
@@ -379,17 +379,17 @@ target_vertex_df <- dplyr::bind_rows(
   trace_vertex_df |> 
     dplyr::filter(target_flag) |> # 入替要素を抽出
     dplyr::mutate(
-      vertex_type = "target"
+      vertex_type = "max"
     ), 
-  # ヒープ化要素の座標
+  # (ヒープの最大値・最後尾を除く)ヒープ化要素の座標
   trace_vertex_df |> 
-    dplyr::filter(!sorted_flag, !target_flag) |> # (最大値を除く)ヒープ要素を抽出
+    dplyr::filter(!sorted_flag, !target_flag) |> # ヒープ要素を抽出
     dplyr::mutate(
       vertex_type = "heap"
     ), 
   # ソート済み要素の座標
   trace_vertex_df |> 
-    dplyr::filter(sorted_flag, !target_flag) |> # (最大値を除く)ソート済み要素を抽出
+    dplyr::filter(sorted_flag, !target_flag) |> # ソート済み要素を抽出
     dplyr::mutate(
       vertex_type = "sort"
     ), 
@@ -397,8 +397,11 @@ target_vertex_df <- dplyr::bind_rows(
   trace_vertex_df |> 
     dplyr::filter(iteration == max(iteration)) |> # 最終結果を抽出
     dplyr::mutate(
-      iteration = iteration + 1, # フレーム調整用
-      vertex_type = "sort"
+      vertex_type = "sort", 
+      heap_num    = 0, 
+      target_flag = FALSE, 
+      sort_flag   = TRUE, 
+      iteration   = iteration + 1 # フレーム調整用
     )
 ) |> 
   dplyr::filter(iteration > 0) |> # フレーム調整用
@@ -408,14 +411,13 @@ target_vertex_df <- dplyr::bind_rows(
   ) |> 
   dplyr::arrange(iteration, index)
 
-# 入替対象の辺の座標を計算
-target_edge_df <- dplyr::bind_rows(
-  # 最大値との入替要素の座標
-  target_vertex_df |> 
-    dplyr::filter(target_flag) |> # 入替要素を抽出
-    dplyr::mutate(
-      edge_id = 1 # 最大値のインデックス
-    ), 
+# 最大値との入替対象の辺の座標を計算
+swap_edge_df <- target_vertex_df |> 
+  dplyr::filter(target_flag) |> # 入替要素を抽出
+  dplyr::arrange(iteration, index)
+
+# ヒープ対象の辺の座標を計算
+heap_edge_df <- dplyr::bind_rows(
   # 親の座標
   target_vertex_df |> 
     dplyr::filter(index <= heap_num%/%2) |> # 葉とソート済み要素を除去
@@ -435,7 +437,7 @@ target_edge_df <- dplyr::bind_rows(
     ), 
 ) |> 
   dplyr::mutate(
-    edge_label = paste0("iter: ", iteration, ", idx: ", edge_id)
+    edge_label = paste0("iter: ", iteration+1, ", idx: ", edge_id)
   ) |> 
   dplyr::arrange(iteration, edge_id, index)
 
@@ -446,9 +448,12 @@ graph <- ggplot() +
   geom_path(data = edge_df, 
             mapping = aes(x = coord_x, y = depth, group = edge_id), 
             linewidth = 1) + # 辺
-  geom_path(data = target_edge_df,
-            mapping = aes(x = coord_x, y = depth, color = vertex_type, group = edge_label),
-            linewidth = 1, linetype = "dashed", show.legend = FALSE) + # 入替対象の辺
+  geom_path(data = heap_edge_df,
+            mapping = aes(x = coord_x, y = depth, group = edge_label),
+            color = "blue", linewidth = 1, linetype = "dashed") + # ヒープ対象の辺
+  geom_path(data = swap_edge_df,
+            mapping = aes(x = coord_x, y = depth, group = iteration),
+            color = "red", linewidth = 1, linetype = "dashed") + # 入替対象の辺
   geom_point(data = target_vertex_df,
              mapping = aes(x = coord_x, y = depth, color = vertex_type, group = vertex_label),
              size = 15, alpha = 0.6) + # 入替対象の頂点
@@ -468,10 +473,10 @@ graph <- ggplot() +
   gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
   scale_x_continuous(labels = NULL) + 
   scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
-  scale_color_manual(breaks = c("target", "heap", "sort"), 
-                     values = c("red", "blue", "orange"), 
-                     labels = c("swap", "heap", "sorted"), 
-                     name = "vertex") + # 操作ごとに色分け
+  scale_color_manual(breaks = c("max", "heap", "sort"),
+                     values = c("red", "blue", "orange"),
+                     labels = c("swap", "heap", "sorted"),
+                     name = "vertex") + # (凡例表示用)
   coord_cartesian(xlim = c(0, 1)) + 
   labs(title = "heap sort", 
        subtitle = "iteration: {next_state}", 
@@ -481,7 +486,7 @@ graph <- ggplot() +
 frame_num <- max(trace_df[["iteration"]]) + 1
 
 # 遷移フレーム数を指定
-s <-20
+s <- 20
 
 # gif画像を作成
 gganimate::animate(
@@ -490,10 +495,6 @@ gganimate::animate(
   width = 1200, height = 600, 
   renderer = gganimate::gifski_renderer()
 )
-
-warnings()
-target_edge_df[["edge_id"]] |> 
-  table()
 
 
 ### ・バーチャート -----
@@ -565,12 +566,9 @@ graph <- ggplot() +
             mapping = aes(x = x, y = y, width = w, height = h, color = "sort"), 
             fill = "orange", alpha = 0.1, linewidth = 1, linetype = "dashed") + # ソート済み範囲
   geom_bar(data = range_swap_df,
-           mapping = aes(x = index, y = value, color = "target", group = bar_label), 
+           mapping = aes(x = index, y = value, color = "max", group = bar_label), 
            stat = "identity", 
            fill = "red", alpha = 0.1, linewidth = 1, linetype = "dashed") + # 入替対象
-  geom_segment(data = upper_df, 
-               mapping = aes(x = 1, y = value, xend = heap_num+0.5, yend = value), 
-               color = "red", linewidth = 1, linetype = "dotted") + # ヒープの最大値
   geom_bar(data = trace_df,
            mapping = aes(x = index, y = value, fill = factor(value), group = id),
            stat = "identity", show.legend = FALSE) + # 全ての要素
@@ -580,9 +578,12 @@ graph <- ggplot() +
   geom_text(data = dup_label_df,
             mapping = aes(x = index, y = 0, label = dup_label, group = id),
             vjust = 1, size = 3) + # 重複ラベル
+  geom_hline(data = upper_df, 
+             mapping = aes(yintercept = value), 
+             color = "red", linewidth = 1, linetype = "dotted") + # ヒープの最大値
   gganimate::transition_states(states = iteration, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
   gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
-  scale_color_manual(breaks = c("target", "heap", "sort"), 
+  scale_color_manual(breaks = c("max", "heap", "sort"), 
                      values = c("red", "blue", "orange"), 
                      labels = c("swap", "heap", "sorted"), 
                      name = "bar") + # (凡例表示用)
