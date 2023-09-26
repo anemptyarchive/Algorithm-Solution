@@ -1,0 +1,1768 @@
+---
+title: "『問題解決力を鍛える！　アルゴリズムとデータ構造』"
+subtitle: "第10章 データ構造(3)：グラフと木"
+author: "[@anemptyarchive](https://www.anarchive-beta.com/)"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output: 
+  html_document: 
+    toc: TRUE       # 目次
+    toc_depth: 3    # 目次の見出しレベル
+    toc_float: TRUE # 目次のスクロール追跡
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  message = FALSE, error = FALSE, warning = FALSE # メッセージを非表示
+)
+```
+
+----
+
+【編集履歴】
+
+- 2023.09.13：執筆開始
+- 2023.09.25：「ヒープ」を追加
+
+----
+
+# 10.7 二分ヒープの実装と可視化
+
+　二分木を用いるヒープ(binary heap)を実装します。また、ヒープ化の推移のアニメーションを作成して、アルゴリズムを確認します。  
+<br>
+
+　利用するパッケージを読み込みます。
+
+```{r, eval=FALSE}
+# 利用パッケージ
+library(tidyverse)
+library(gganimate)
+```
+
+```{r, echo=FALSE}
+### 資料作成用
+
+# チェック用
+library(ggplot2)
+```
+
+　この記事では、基本的に `パッケージ名::関数名()` の記法を使っているので、パッケージを読み込む必要はありません。ただし、作図コードについてはパッケージ名を省略しているので、`ggplot2` を読み込む必要があります。  
+　また、ネイティブパイプ演算子 `|>` を使っています。`magrittr` パッケージのパイプ演算子 `%>%` に置き換えても処理できますが、その場合は `magrittr` を読み込む必要があります。  
+
+　「アルゴリズムの可視化」において、`gganimate` パッケージを利用してアニメーション(gif画像)を作成します。ソートの実装自体には使いません。  
+<br>
+
+
+## ヒープ化
+
+　まずは、数列をヒープ化する操作の実装と可視化を行います。  
+<br>
+
+
+### ヒープ化の実装
+
+　二分ヒープ化のアルゴリズムを関数として実装します。  
+<br>
+
+　部分木のヒープ化を実装します。
+
+```{r}
+# 部分木のヒープ化の実装
+sub_heapify <- function(vec, i, N) {
+  
+  # 左側の子のインデックスを計算
+  child_idx <- i * 2
+  
+  # 子がなければ終了
+  if(child_idx > N) return(vec)
+  
+  # 値が大きい方の子のインデックスを設定
+  if(child_idx+1 <= N & vec[child_idx+1] > vec[child_idx]) { # (&の左がFALSEだと右が処理されずNAにならない)
+    child_idx <- child_idx + 1
+  }
+  
+  # 子が親以下なら終了
+  if(vec[child_idx] <= vec[i]) return(vec)
+  
+  # 子と親を入替
+  vec[1:N] <- replace(x = vec, list = c(child_idx, i), values = vec[c(i, child_idx)])
+  
+  # 子を部分木の根としてヒープ化
+  vec[1:N] <- sub_heapify(vec, child_idx, N)
+  
+  # 数列を出力
+  return(vec)
+}
+```
+
+　数列を `vec`、入れ替え対象のインデックスを `i`、数列の要素数を `N` とします。  
+　`i` の初期値として部分木の根のインデックスを受け取ります。  
+　`i` 番目の頂点(要素)の2つの子の内、左側の子のインデックスを `child_idx` として計算します。頂点 $v_i$ の左側の子 $v_j$ のインデックスは $j = 2 i$ で求まります。ただし、$j \gt N$ のとき、頂点 $v_i$ に子がない(葉である)ことを意味し、入れ替え不要なので、数列をそのまま出力します。  
+　$j + 1 \leq N$ のとき右側の子 $v_{j+1}$ が存在するので、2つの子の値が大きい方のインデックスを `childe_idx` とします。  
+　子の値 `vec[child_idx]` と親の値 `vec[i]` を比較して、子が親以下なら入れ替え不要なので数列をそのまま出力(再帰処理を終了)します。子が親より大きければ値を入れ替えて、`childe_idx` 番目の頂点を根とする部分木を `sub_heapify()` でヒープ化します。  
+
+　`sub_heapify()` を実行すると内部でさらに(入れ替え対象の頂点が葉になるまで再帰的に) `sub_heapify()` が実行され、親子の入れ替えが繰り返されて部分木がヒープ化されます。  
+
+　アルゴリズムの詳しい解説は、本のcode 12.4(前半)などを参照してください。  
+<br>
+
+　木全体のヒープ化を実装します。
+
+```{r}
+# ヒープ化の実装
+heapify <- function(vec) {
+  
+  # 要素数を取得
+  N <- length(vec)
+  
+  # 葉を除くノード番号の最大値を設定
+  max_i <- N %/% 2
+  
+  # 全体をヒープ化
+  for(i in max_i:1) {
+    
+    # i番目の頂点を根とする部分木をヒープ化
+    vec[1:N] <- sub_heapify(vec, i, N)
+  }
+  
+  # 数列を出力
+  return(vec)
+}
+```
+
+　数列を `vec`、数列の要素数を `N` とします。  
+　各頂点(要素)を逆順に部分木の根として、`sub_heapify()` で部分木ごとにヒープ化していきます。ただし、葉(子の無い頂点)はヒープ化不要(ヒープ化済みとみなせる)なので、最後尾(N番目)の頂点の親から処理します。$N$ 番目の頂点 $v_N$ の親(葉を除く最後の頂点) $v_j$ のインデックスは $j = \lfloor \frac{N}{2} \rfloor$ で求められます。$\lfloor x \rfloor$ は、床関数(`floor()`)で、$x$ 以下の最大の整数(小数点以下の切り捨て)を表します。  
+
+　アルゴリズムの詳しい解説は、本のcode 12.4(後半の一部)などを参照してください。  
+<br>
+
+
+### ヒープの可視化
+
+　ヒープ化された数列を二分木(バイナリツリー)で確認します。親子間のインデックスや座標の計算、バイナリツリーの作成については「二分木を作図したい」を参照してください。  
+<br>
+
+　要素数を指定して、数列を作成します。
+
+```{r}
+# 要素数を指定
+N <- 25
+
+# (簡易的に)数列を作成
+a <- 1:N
+a
+```
+
+　`N` 個の値を作成します。数列のみが与えられている場合は、要素数を `N` とします。  
+
+　数列をヒープ化します。
+
+```{r}
+# ヒープ化
+a <- heapify(a)
+a
+```
+
+　1番目の要素が最大値になります。  
+
+　頂点の描画用のデータフレームを作成します。
+
+```{r}
+# ノードの座標を作成
+d <- 0.6
+vertex_df <- tibble::tibble(
+  value = a, 
+  index = 1:length(a), 
+  depth = floor(log2(index)), # 縦方向のノード位置
+  col_idx = index - 2^depth + 1, # 深さごとのノード番号
+  coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向のノード位置
+  label_offset = dplyr::if_else(
+    condition = index%%2 == 0, true = 0.5+d, false = 0.5-d
+  ) # ラベル位置を左右にズラす
+)
+vertex_df
+```
+
+　数列とインデックスを格納して、頂点(ノード)の座標を計算します。  
+　また、ラベル位置の調整用の値を作成します。この例では、インデックスが偶数の場合は左にズラすために0.5以上の値、奇数の場合は右にズラすために0.5以下の値を格納しています。  
+
+　辺の描画用のデータフレームを作成します。
+
+```{r}
+# エッジの座標を作成
+edge_df <- dplyr::bind_rows(
+  # 子ノードの座標
+  vertex_df |> 
+    dplyr::filter(depth > 0) |> # 根を除去
+    dplyr::mutate(
+      edge_id   = index, 
+      node_type = "childe" # (確認用)
+    ), 
+  # 親ノードの座標
+  vertex_df |> 
+    dplyr::filter(depth > 0) |> # 根を除去
+    dplyr::mutate(
+      edge_id   = index, 
+      node_type = "parent", # (確認用)
+      depth   = depth - 1, # 縦方向のノード位置
+      index   = index %/% 2, 
+      col_idx = index - 2^depth + 1, # 深さごとのノード番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向のノード位置
+    )
+) |> 
+  dplyr::select(!label_offset) |> 
+  dplyr::arrange(edge_id, depth)
+edge_df
+```
+
+　数列とインデックスを格納して、辺(エッジ)の始点と終点(根を除く各頂点とその親)の座標を計算します。  
+　線分間が繋がらないように、子のインデックスをエッジIDとして用います。  
+
+　ヒープ化した数列をバイナリツリーとして作図します。
+
+```{r, fig.width=8, fig.height=6, dpi=100}
+# ツリーの高さを取得
+max_h <- floor(log2(N))
+
+# 二分木を作図
+d <- 0.1
+ggplot() + 
+  geom_path(data = edge_df, 
+            mapping = aes(x = coord_x, y = depth, group = edge_id), 
+            linewidth = 1) + # 辺
+  geom_point(data = vertex_df, 
+             mapping = aes(x = coord_x, y = depth), 
+             size = 12, shape = "circle filled", fill = "white", stroke = 1) + # 頂点
+  geom_text(data = vertex_df, 
+            mapping = aes(x = coord_x, y = depth, label = value), 
+            size = 5) + # 値ラベル
+  geom_text(data = vertex_df, 
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = label_offset), 
+            size = 4, vjust = -2, color = "green4") + # 位置ラベル
+  scale_x_continuous(labels = NULL, name = "") + 
+  scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
+  coord_cartesian(xlim = c(0, 1), ylim = c(max_h+d, -d)) + 
+  labs(title = "binary heap", 
+       subtitle = paste0("height = ", max_h), 
+       y = "depth")
+```
+
+　全ての親子間で親の値が子の値以上であり、根(一番上の頂点)が最大値なのを確認できます。最大値以外の要素がどの頂点(インデックス)なのかは分かりません。  
+<br>
+
+
+### ヒープ化の可視化
+
+　二分ヒープ化のアルゴリズムをグラフで確認します。  
+<br>
+
+　アルゴリズムに従いヒープ化を行って、作図用のデータを作成します。  
+
+　親子の値の大小関係による要素(値とインデックス)の入れ替えを関数に作成します。
+
+```{r}
+# 親子ノードの入替の実装
+swap <- function(value, index, i, N) {
+  
+  # 数列の値・インデックスを取得
+  val_vec <- value
+  idx_vec <- index
+  
+  # 左側の子のインデックスを計算
+  child_idx <- i * 2
+  
+  # 子がなければ終了
+  if(child_idx > N) {
+    lt <- list(value = val_vec, index = idx_vec, target = i)
+    return(lt)
+  }
+  
+  # 値が大きい方の子のインデックスを設定
+  if(child_idx+1 <= N & val_vec[child_idx+1] > val_vec[child_idx]) {
+    child_idx <- child_idx + 1
+  }
+  
+  # 子が親以下なら終了
+  if(val_vec[child_idx] <= val_vec[i]) {
+    lt <- list(value = val_vec, index = idx_vec, target = i)
+    return(lt)
+  }
+  
+  # 子と親を入替
+  val_vec[1:N] <- replace(x = val_vec, list = c(child_idx, i), values = val_vec[c(i, child_idx)])
+  idx_vec[1:N] <- replace(x = idx_vec, list = c(child_idx, i), values = idx_vec[c(i, child_idx)])
+  
+  # 数列を出力
+  if(child_idx <= N%/%2) {
+    
+    # 親子の入替があれば継続
+    lt <- list(value = val_vec, index = idx_vec, target = child_idx)
+    
+  } else {
+    
+    # 子が葉なら終了
+    lt <- list(value = val_vec, index = idx_vec, target = i)
+  }
+  return(lt)
+}
+```
+
+　数列全体と入替範囲のインデックスを受け取り、`sub_heapify()` と同様に親子の入れ替えを行い、作図用の値を出力します。再帰処理は行いません。  
+　作図用の値として、「数列の値・インデックス」のベクトルと「入れ替え後のインデックス」の値をリストに格納して出力します。  
+<br>
+
+　要素数を指定して、数列を作成します。
+
+```{r}
+# 要素数を指定
+N <- 40
+
+# 数列を作成
+a <- sample(x = 1:N, size = N, replace = FALSE)
+
+# 葉を除く頂点数を計算
+max_i <- N %/% 2
+
+# 数列を格納
+trace_df <- tibble::tibble(
+  step  = 0,   # 試行回数
+  id    = 1:N, # 元のインデックス
+  index = 1:N, # 各試行のインデックス
+  value = a    # 要素
+) |> 
+  dplyr::mutate(
+    target_flag = FALSE, # 入替対象の頂点
+    heap_flag   = index > max_i # ヒープ化済みの部分木頂点
+  )
+trace_df
+```
+
+```{r, echo=FALSE}
+### 資料作成用:(値の保存)
+
+initial_a <- a
+```
+
+　乱数生成関数 `sample()` などで数値ベクトルを生成します。  
+
+　1データずつ入れ替え処理を行い、数列を記録します。
+
+```{r}
+# 作図用のオブジェクトを初期化
+id_vec <- 1:N
+
+# ヒープ化
+iter <- 0
+for(i in max_i:1) {
+  
+  # i番目の頂点を設定
+  target_idx <- i
+  
+  # i番目の頂点を根とする部分木をヒープ化
+  swap_flag <- TRUE
+  while(swap_flag) {
+    
+    # 試行回数をカウント
+    iter <- iter + 1
+    
+    # 親子の値を比較・入替
+    res_lt <- swap(a, id_vec, target_idx, N)
+    a[1:N]      <- res_lt[["value"]]
+    id_vec[1:N] <- res_lt[["index"]]
+    next_target_idx <- res_lt[["target"]]
+    
+    # 数列を格納
+    tmp_df <- tibble::tibble(
+      step  = iter, 
+      id    = id_vec, 
+      index = 1:N, 
+      value = a
+    ) |> 
+      dplyr::mutate(
+        target_flag = index %in% c(target_idx, target_idx*2, target_idx*2+1), # 入替対象の親子
+        heap_flag   = index >= i & !target_flag # 入替対象を除く処理済み頂点
+      )
+    
+    # 結果を記録
+    trace_df <- dplyr::bind_rows(trace_df, tmp_df)
+    
+    # 入替の有無を確認
+    if(target_idx == next_target_idx) {
+      
+      # 入替がなければ終了
+      swap_flag <- FALSE
+      
+    } else {
+      
+      # 入替があれば入替後の頂点を親として設定
+      target_idx <- next_target_idx
+    }
+    
+    # 途中経過を表示
+    #print(paste0("--- step: ", iter, " ---"))
+    #print(a)
+  }
+}
+```
+
+　「ヒープ化の実装」のときと同様にして、要素を入れ替えていきます。再帰処理に関しては、`while()` を使って入れ替えが行われなくなるまで繰り返します。    
+　数列 `a` の初期値のインデックス(`1` から `N` の整数)を `id_vec` としておき、`a` の要素の入れ替えに対応するように `id_vec` の要素も入れ替えます。  
+　試行ごとに、数列やインデックスをデータフレームに保存します。  
+<br>
+
+　各試行の二分木のグラフを切り替えて推移を確認します。  
+
+　試行ごとの頂点の描画用のデータフレームを作成します。
+
+```{r}
+# 頂点の座標を作成
+trace_vertex_df <- trace_df |> 
+  dplyr::group_by(step) |> # 座標計算用
+  dplyr::mutate(
+    depth   = floor(log2(index)), # 縦方向の頂点位置
+    col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
+  ) |> 
+  dplyr::ungroup()
+trace_vertex_df
+```
+
+　各試行の数列データ `trace_df` を用いて、試行ごとに(`step` 列でグループ化して)、「ヒープの可視化」のときと同様にして、頂点の座標を計算します。  
+
+　辺の描画用のデータフレームを作成します。
+
+```{r}
+# 辺の座標を作成
+edge_df <- dplyr::bind_rows(
+  # 子の座標
+  trace_vertex_df |> 
+    dplyr::filter(step == 0, depth > 0) |> # 1試行分のデータを抽出・根を除去
+    dplyr::mutate(
+      edge_id = index
+    ), 
+  # 親の座標
+  trace_vertex_df |> 
+    dplyr::filter(step == 0, depth > 0) |> # 1試行分のデータを抽出・根を除去
+    dplyr::mutate(
+      edge_id = index, # 子インデックス
+      depth   = depth - 1, # 縦方向の頂点位置
+      index   = index %/% 2, # 親インデックス
+      col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向の頂点位置
+    )
+) |> 
+  dplyr::select(!step) |> # フレーム遷移の影響から外す
+  dplyr::arrange(edge_id, depth)
+edge_df
+```
+
+　1試行分(この例だと初期値)の頂点の座標データを取り出して、「ヒープの可視化」のときと同様にして、辺(始点・終点)の座標を計算します。  
+
+　インデックスラベルの描画用のデータフレームを作成します。
+
+```{r}
+# インデックスラベルの座標を作成
+d <- 0.6
+index_df <- trace_vertex_df |> 
+  dplyr::filter(step == 0) |> # 1試行分のデータを抽出
+  dplyr::mutate(
+    offset = dplyr::if_else(
+      condition = index%%2 == 0, true = 0.5+d, false = 0.5-d
+    ) # ラベル位置を左右にズラす
+  ) |> 
+  dplyr::select(!step) # フレーム遷移の影響から外す
+index_df
+```
+
+　1試行分の頂点の座標データを取り出して、「ヒープの可視化」のときと同様にして、ラベル位置の調整値を追加します。  
+
+　ヒープ化済みの頂点の描画用のデータフレームを作成します。
+
+```{r}
+# ヒープ化済み頂点の座標を作成
+heap_df <- trace_vertex_df |> 
+  dplyr::filter(heap_flag, step > 0) |> # ヒープ化済み頂点を抽出・初期値を除去:(表示フレームの調整用)
+  dplyr::mutate(
+    step = step - 1 # 表示フレームを調整
+  ) |> 
+  dplyr::bind_rows(
+    trace_vertex_df |> 
+      dplyr::filter(step == max(step))
+  ) # 最終値を追加:(表示フレームの調整用)
+heap_df
+```
+
+　各試行の頂点の座標データ `trace_vertex_df` から、各試行におけるヒープ化済み要素の座標データ(`heap_flag` 列が `TRUE` の行)を取り出します。  
+　1試行早く表示するために、`step` 列を-1し、最終値(全ての要素がヒープ化済み)のデータを複製します。  
+
+　入れ替え対象の頂点の描画用のデータフレームを作成します。
+
+```{r}
+# 入替対象の頂点の座標を作成
+target_vertex_df <- trace_vertex_df |> 
+  dplyr::filter(target_flag) |> # 入替対象の親を抽出
+  dplyr::mutate(
+    step = step - 1 # 表示フレームを調整
+  ) |> 
+  dplyr::arrange(step, index)
+target_vertex_df
+```
+
+　各試行における入れ替え対象の座標データ(`target_flag` 列が `TRUE` の行)を取り出します。  
+
+　入れ替え対象の頂点を結ぶ辺の描画用のデータフレームを作成します。
+
+```{r}
+# 入替対象の辺の座標を作成
+target_edge_df <- dplyr::bind_rows(
+  # 親の座標
+  target_vertex_df |> 
+    dplyr::group_by(step) |> 
+    dplyr::filter(index == min(index)) |> # 親を抽出
+    dplyr::ungroup() |> 
+    tidyr::uncount(weights = 2, .id = "childe_id") |> # 子の数に複製
+    dplyr::mutate(
+      childe_id = childe_id - 1, # 行番号を子IDに変換
+      edge_id   = index * 2 + childe_id # 子インデックス
+    ) |> 
+    dplyr::filter(edge_id <= N), # 子がなければ除去
+  # 子の座標
+  target_vertex_df |> 
+    dplyr::group_by(step) |> 
+    dplyr::filter(index != min(index)) |> # 子を抽出
+    dplyr::ungroup() |> 
+    dplyr::mutate(
+      edge_id = index
+    )
+) |> 
+  dplyr::arrange(step, index)
+target_edge_df
+```
+
+　入れ替え対象の頂点の座標データ `target_vertex_df` から、入替元の頂点とその子の座標データを取り出して結合します。親のデータは、各試行におけるインデックスが最小の要素(行)で、子の数に対応するように複製します。  
+
+　ヒープ化の推移のアニメーションを作成します。
+
+```{r}
+# ヒープ化のアニメーションを作図
+max_h <- floor(log2(N))
+graph <- ggplot() + 
+  geom_path(data = edge_df, 
+            mapping = aes(x = coord_x, y = depth, group = edge_id), 
+            linewidth = 1) + # 辺
+  geom_path(data = target_edge_df,
+            mapping = aes(x = coord_x, y = depth, group = edge_id),
+            color = "red", linewidth = 1, linetype = "dashed") + # 入替対象の辺
+  geom_point(data = target_vertex_df,
+             mapping = aes(x = coord_x, y = depth, group = step),
+             size = 14, color = "red", alpha = 0.5) + # 入替対象の頂点
+  geom_point(data = heap_df,
+             mapping = aes(x = coord_x, y = depth, group = step),
+             size = 14, color = "blue", alpha = 0.5) + # ヒープ化済みの頂点
+  geom_point(data = trace_vertex_df, 
+             mapping = aes(x = coord_x, y = depth, group = id), 
+             size = 12, shape = "circle filled", fill = "white", stroke = 1) + # 頂点
+  geom_text(data = trace_vertex_df, 
+            mapping = aes(x = coord_x, y = depth, label = as.character(value), group = id), 
+            size = 5) + # 値ラベル
+  geom_text(data = index_df, 
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset), 
+            size = 4, vjust = -1.7, color = "green4") + # インデックスラベル
+  gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
+  gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
+  scale_x_continuous(labels = NULL) + 
+  scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
+  coord_cartesian(xlim = c(0, 1)) + 
+  labs(title = "heapify", 
+       subtitle = "step: {next_state}", 
+       x = "", y = "depth")
+
+# フレーム数を取得
+frame_num <- max(trace_df[["step"]]) + 1
+
+# 遷移フレーム数を指定
+s <- 20
+
+# gif画像を作成
+gganimate::animate(
+  plot = graph, 
+  nframes = (frame_num + 2)*s, start_pause = s, end_pause = s, fps = 20, 
+  width = 1200, height = 600, 
+  renderer = gganimate::gifski_renderer()
+)
+```
+
+　`transition_states()` のフレーム制御の引数 `states` に試行回数列 `step` を指定して、これまでと同様に作図します。  
+　`animate()` の `plot` 引数にグラフオブジェクト、`nframes` 引数にフレーム数を指定して、gif画像を作成します。  
+　初期値を含むため試行回数は最大値+1です。`transition_states()` でアニメーションを作成すると、フレーム間の値を補完して、状態の遷移を描画します。遷移(1試行当たり)のフレーム数を `s` として、試行回数の `s` 倍の値を `nframes` 引数に指定します。  
+
+　入れ替え対象の頂点を赤色、親子がヒープ化済みの頂点を青色の塗りつぶしで示します。  
+
+　葉(子の無い頂点)を除く一番後の頂点(N番目の頂点の親)から順番に、各頂点を根として部分木をヒープ化していきます。  
+　部分木の根の値を子と比較して、子の方が大きければ入れ替えます。入れ替えた場合はさらに、入替先の子(元の位置からだと孫)と比較して、子の方が大きければ入れ替える操作を繰り返します。入れ替えが行われなかった場合は、次の頂点に移ります。  
+　「根より子の方が小さい」または「根が葉まで到達する」と、部分木がヒープ化された状態になります。この操作を後から繰り返すことで、末端の(小さな)部分木から徐々に、全体がヒープ化されるのを確認できます。  
+
+　ここでの試行回数(stepの値)は、この可視化方法における試行番号(作図処理上の値)であり他の手法と対応していません。  
+<br>
+
+
+## 値の挿入
+
+　次は、ヒープに新たな値を追加する操作の実装と可視化を行います。  
+<br>
+
+
+### 値の挿入の実装
+
+　二分ヒープへの値の挿入のアルゴリズムを関数として実装します。  
+<br>
+
+　値の挿入を実装します。
+
+```{r}
+# 値の挿入の実装
+push <- function(vec, val) {
+  
+  # 挿入要素(子)のインデックスを設定
+  i <- length(vec) + 1
+  
+  # ヒープ化
+  while(i > 1) { # (根に達するまで)
+    
+    # 親のインデックスを計算
+    parent_idx <- i %/% 2
+    
+    # 親が子以上なら終了
+    if(vec[parent_idx] >= val) break
+    
+    # 子と親を入替
+    vec[i] <- vec[parent_idx] # 親の値を子の位置に移動
+    i      <- parent_idx      # 挿入位置を親の位置に更新
+  }
+  
+  # 値を挿入
+  vec[i] <- val
+  
+  # 数列を出力
+  return(vec)
+}
+```
+
+　ヒープ化済みの数列を `vec`、挿入する値を `val`、値の挿入位置(インデックス)を `i` とします。  
+　`i` の初期値として挿入後の要素数を設定します。この操作が、最後尾への要素の挿入に対応します。  
+　`i` 番目の頂点(要素)の親のインデックスを `parent_idx` として計算します。頂点 $v_i$ の親 $v_j$ のインデックスは $j = \lfloor \frac{i}{2} \rfloor$ で求まります。  
+
+　挿入する値 `val` と親の値 `vec[parent_idx]` を大小比較していき、挿入位置 `i` を探索します。  
+　挿入する値が大きければ、`vec` の `parent_idx` 番目の値を `i` 番目に複製し、挿入位置 `i` を `parent_idx` に更新します。この操作が、親子要素の入れ替えに対応します。ただしこの時点では、`vec` の `i, parent_idx` 番目が同じ値です。  
+　「親の値が挿入値以上」または「挿入位置が根(親がない)」であれば、ループ処理を終了して `vec` の `i` 番目に `val` を代入します。この操作によって入れ替えが完了します。  
+
+　アルゴリズムの詳しい解説は、本のcode 10.5(前半)などを参照してください。  
+<br>
+
+　実装した関数を試してみます。  
+
+　ヒープを作成して、値を挿入します。
+
+```{r}
+# 要素数を指定
+N <- 25
+
+# (簡易的に)数列を作成
+a <- 1:N
+
+# ヒープ化
+a <- heapify(a)
+
+# 挿入値を指定
+x <- 23.5
+
+# 値を挿入してヒープ化
+a <- push(a, x)
+a; length(a)
+```
+
+　要素数が1つ増えます。  
+
+　「ヒープの可視化」のときのコードで、新たな値を追加したヒープをバイナリツリーで確認します。
+
+```{r, echo=FALSE, fig.width=8, fig.height=6, dpi=100}
+### 資料作成用:(再掲)
+
+# ノードの座標を作成
+d <- 0.6
+vertex_df <- tibble::tibble(
+  value = a, 
+  index = 1:length(a), 
+  depth = floor(log2(index)), # 縦方向のノード位置
+  col_idx = index - 2^depth + 1, # 深さごとのノード番号
+  coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向のノード位置
+  label_offset = dplyr::if_else(
+    condition = index%%2 == 0, true = 0.5+d, false = 0.5-d
+  ) # ラベル位置を左右にズラす
+)
+
+# エッジの座標を作成
+edge_df <- dplyr::bind_rows(
+  # 子ノードの座標
+  vertex_df |> 
+    dplyr::filter(depth > 0) |> # 根を除去
+    dplyr::mutate(
+      edge_id   = index, 
+      node_type = "childe" # (確認用)
+    ), 
+  # 親ノードの座標
+  vertex_df |> 
+    dplyr::filter(depth > 0) |> # 根を除去
+    dplyr::mutate(
+      edge_id   = index, 
+      node_type = "parent", # (確認用)
+      depth   = depth - 1, # 縦方向のノード位置
+      index   = index %/% 2, 
+      col_idx = index - 2^depth + 1, # 深さごとのノード番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向のノード位置
+    )
+) |> 
+  dplyr::select(!label_offset) |> 
+  dplyr::arrange(edge_id, depth)
+
+# ツリーの高さを取得
+max_h <- floor(log2(N))
+
+# 二分木を作図
+d <- 0.1
+ggplot() + 
+  geom_path(data = edge_df, 
+            mapping = aes(x = coord_x, y = depth, group = edge_id), 
+            linewidth = 1) + # 辺
+  geom_point(data = vertex_df, 
+             mapping = aes(x = coord_x, y = depth), 
+             size = 12, shape = "circle filled", fill = "white", stroke = 1) + # 頂点
+  geom_text(data = vertex_df, 
+            mapping = aes(x = coord_x, y = depth, label = value), 
+            size = 5) + # 値ラベル
+  geom_text(data = vertex_df, 
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = label_offset), 
+            size = 4, vjust = -2, color = "green4") + # 位置ラベル
+  scale_x_continuous(labels = NULL, name = "") + 
+  scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
+  coord_cartesian(xlim = c(0, 1), ylim = c(max_h+d, -d)) + 
+  labs(title = "binary heap", 
+       subtitle = "push", 
+       y = "depth")
+```
+
+　「ヒープの可視化」のときの図から、この図に変化します。  
+<br>
+
+
+### 値の挿入の可視化
+
+　続いて、二分ヒープ化への値の挿入のアルゴリズムをグラフで確認します。  
+<br>
+
+　アルゴリズムに従いヒープ化を行って、作図用のデータを作成します。
+
+　要素数を指定して、ヒープを作成します。
+
+```{r}
+# 要素数を指定
+initial_N <- 40
+
+# ヒープを作成
+initial_a <- sample(x = 1:initial_N, size = initial_N, replace = FALSE) |> 
+  heapify()
+initial_a
+```
+
+　`N - 1` 個の値を作成して、`heapify()` でヒープ化します。  
+
+　値を指定して、ヒープに挿入します。
+
+```{r}
+# 挿入する値を指定
+x <- 38.5
+
+# 値を挿入
+a <- c(initial_a, x)
+
+# 挿入後の要素数を取得
+N <- length(a)
+a; N
+```
+
+　ヒープ(数列)の最後尾に値を追加します。  
+
+　数列の記録用のデータフレームを作成します。
+
+```{r}
+# 数列を格納
+trace_df <- dplyr::bind_rows(
+  # 初期値
+  tibble::tibble(
+    step  = 0, 
+    id    = 1:initial_N, 
+    index = id, 
+    value = initial_a, 
+    target_flag = FALSE
+  ), 
+  # 挿入後
+  tibble::tibble(
+    step  = 1, 
+    id    = 1:N, 
+    index = id, 
+    value = a, 
+    target_flag = index == N # 挿入対象
+  )
+)
+trace_df
+```
+
+　初期値(挿入前)と挿入後の数列をデータフレームに格納します。  
+
+　1試行ずつ入れ替え処理を行い、数列を記録します。
+
+```{r}
+# 挿入要素のインデックスを設定
+i <- N
+
+# 作図用のオブジェクトを初期化
+id_vec <- 1:N
+
+# ヒープ化
+iter <- 1
+break_flag <- FALSE
+while(i > 1) {
+  
+  # 試行回数を更新
+  iter <- iter + 1
+  
+  # 親のインデックスを計算
+  parent_idx <- i %/% 2
+  
+  # 親のインデックスを計算
+  parent_idx <- i %/% 2
+  
+  # 親が子未満なら親子を入替
+  if(a[parent_idx] < a[i]) {
+    a[1:N]      <- replace(x = a, list = c(i, parent_idx), values = a[c(parent_idx, i)])
+    id_vec[1:N] <- replace(x = id_vec, list = c(i, parent_idx), values = id_vec[c(parent_idx, i)])
+  } else {
+    break_flag <- TRUE
+  }
+  
+  # 数列を格納
+  tmp_df <- tibble::tibble(
+    step  = iter, 
+    id    = id_vec, 
+    index = 1:N, 
+    value = a, 
+    target_flag = index %in% c(i, parent_idx) # 入替対象
+  )
+  
+  # 数列を記録
+  trace_df <- dplyr::bind_rows(trace_df, tmp_df)
+
+  # 親が子以上なら終了
+  if(break_flag) break
+  
+  # 挿入位置を親の位置に更新
+  i <- parent_idx
+  
+  # 途中経過を表示
+  #print(paste0("--- step: ", iter, " ---"))
+  #print(a)
+}
+```
+
+　「値の挿入の実装」のときと同様にして要素を入れ替えていき、試行ごとに数列やインデックスをデータフレームに保存します。  
+<br>
+
+　各試行の二分木のグラフを切り替えて推移を確認します。  
+
+　「ヒープ化の可視化」のときのコードで、試行ごとの頂点と辺、インデックラベルの描画用のデータフレーム(`trace_vertex_df`・`edge_df`・`index_df`)を作成します。ただし、初期値(`step` 列が `0`)ではなく、挿入後(`step` 列が `1`  より大きい値)の座標データを取り出します。
+
+```{r, echo=FALSE}
+### 資料作成用:(再掲)
+
+# 頂点の座標を作成
+trace_vertex_df <- trace_df |> 
+  dplyr::group_by(step) |> # 座標計算用
+  dplyr::mutate(
+    depth   = floor(log2(index)), # 縦方向の頂点位置
+    col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
+  ) |> 
+  dplyr::ungroup()
+
+# 辺の座標を作成
+edge_df <- dplyr::bind_rows(
+  # 子の座標
+  trace_vertex_df |> 
+    dplyr::filter(step == 1, depth > 0) |> # 1試行分のデータを抽出・根を除去
+    dplyr::mutate(
+      edge_id = index
+    ), 
+  # 親の座標
+  trace_vertex_df |> 
+    dplyr::filter(step == 1, depth > 0) |> # 1試行分のデータを抽出・根を除去
+    dplyr::mutate(
+      edge_id = index, # 子インデックス
+      depth   = depth - 1, # 縦方向の頂点位置
+      index   = index %/% 2, # 親インデックス
+      col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向の頂点位置
+    )
+) |> 
+  dplyr::select(!step) |> # フレーム遷移の影響から外す
+  dplyr::arrange(edge_id, depth)
+
+# インデックスラベルの座標を作成
+d <- 0.6
+index_df <- trace_vertex_df |> 
+  dplyr::filter(step == 1) |> # 1試行分のデータを抽出
+  dplyr::mutate(
+    offset = dplyr::if_else(
+      condition = index%%2 == 0, true = 0.5+d, false = 0.5-d
+    ) # ラベル位置を左右にズラす
+  ) |> 
+  dplyr::select(!step) # フレーム遷移の影響から外す
+```
+
+
+　入れ替え対象の頂点と辺の描画用のデータフレームを作成します。
+
+```{r}
+# 入替対象の頂点の座標を作成
+target_vertex_df <- trace_vertex_df |> 
+  dplyr::filter(target_flag) |> # 入替対象の親を抽出
+  dplyr::mutate(
+    step = step - 1 # 表示フレームを調整
+  ) |> 
+  dplyr::arrange(step, index)
+
+# 入替対象の辺の座標を作成
+target_edge_df <- target_vertex_df |> 
+  dplyr::bind_rows(
+    target_vertex_df |> 
+      dplyr::filter(step == 0)
+  ) # (警告文回避用に挿入値を複製)
+target_edge_df
+```
+
+　「ヒープ化の可視化」のときのコードで `trace_vertex_df` を作成します。  
+　値の挿入操作では1点の座標データしかないので、挿入時(値を調整したので `step` 列が `0` の行)を複製して `target_edge_df` とします。または、挿入時のデータ(行)を取り除いて、座標データを欠損させた `step` 列が `0` の行を追加します(追加しておかないと(?)フレームの表示順がバグります)。  
+
+　ヒープに値を挿入した際の推移のアニメーションを作成します。
+
+```{r}
+# ヒープ化のアニメーションを作図
+max_h <- floor(log2(N))
+graph <- ggplot() + 
+  geom_path(data = edge_df,
+            mapping = aes(x = coord_x, y = depth, group = edge_id),
+            linewidth = 1) + # 辺
+  geom_path(data = target_edge_df,
+            mapping = aes(x = coord_x, y = depth, group = step),
+            color = "red", linewidth = 1, linetype = "dashed") + # 入替対象の辺
+  geom_point(data = target_vertex_df,
+             mapping = aes(x = coord_x, y = depth, group = step),
+             size = 14, color = "red", alpha = 0.5) + # 入替対象の頂点
+  geom_point(data = trace_vertex_df,
+             mapping = aes(x = coord_x, y = depth, group = id),
+             size = 12, shape = "circle filled", fill = "white", stroke = 1) + # 頂点
+  geom_text(data = trace_vertex_df,
+            mapping = aes(x = coord_x, y = depth, label = as.character(value), group = id),
+            size = 5) + # 値ラベル
+  geom_text(data = index_df,
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset),
+            size = 4, vjust = -1.7, color = "green4") + # インデックスラベル
+  gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
+  gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
+  scale_x_continuous(labels = NULL) + 
+  scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
+  coord_cartesian(xlim = c(0, 1)) + 
+  labs(title = "heapify : push (up-heap)", 
+       subtitle = "step: {next_state}", 
+       x = "", y = "depth")
+
+# フレーム数を取得
+frame_num <- max(trace_df[["step"]]) + 1
+
+# 遷移フレーム数を指定
+s <- 20
+
+# gif画像を作成
+gganimate::animate(
+  plot = graph, 
+  nframes = (frame_num + 2)*s, start_pause = s, end_pause = s, fps = 20, 
+  width = 1200, height = 600, 
+  renderer = gganimate::gifski_renderer()
+)
+```
+
+　挿入対象または入替対象の頂点を赤色の塗りつぶしで示します。  
+
+　ヒープ化されている元の要素数を $N$ とすると、$N + 1$ 番目の頂点(要素)に値を追加します。ヒープ条件を満たさなくなる場合があるので、追加した値と親の値を比較・入替を繰り返します。  
+　ヒープ条件を満たすまで、挿入値とその親を入れ替えていくことでヒープ化されるのを確認できます。  
+<br>
+
+
+### ヒープ化の可視化
+
+　「ヒープ化」では、数列自体をヒープとして値の入れ替えを行いました。ここでは、数列の値を1つずつヒープに挿入していく場合のアルゴリズムをグラフで確認します。  
+<br>
+
+　アルゴリズムに従いヒープ化を行って、作図用のデータを作成します。  
+
+　要素数を指定して、数列を作成します。
+
+```{r, eval=FALSE}
+# 要素数を指定
+N <- 40
+
+# 数列を作成
+initial_a <- sample(x = 1:N, size = N, replace = FALSE)
+initial_a
+```
+
+```{r, echo=FALSE}
+### 資料作成用:(値の設定)
+
+N <- 40
+initial_a
+```
+
+<br>
+
+　数列の記録用のデータフレームを作成します。
+
+```{r}
+# 1番目の要素を挿入
+a <- initial_a[1]
+
+# 数列を格納
+trace_df <- tibble::tibble(
+  step  = 0, # 試行番号
+  id    = 1:N, # 元のインデックス
+  index = c(1, rep(NA, times = N-1)), # 試行ごとのインデックス:(未挿入はNAとする)
+  value = initial_a, # 要素:(未挿入要素も含める)
+  target_flag = FALSE, # 挿入・入替対象:(初手FALSEの方が処理が楽)
+  insert_flag = !is.na(index) # 挿入済み要素
+)
+trace_df
+```
+
+　1番目の要素を挿入した状態を初期値とします。初回は要素が1つなので入れ替えは不要です。  
+
+　1データずつ挿入と入れ替え処理を行い、数列を記録します。
+
+```{r}
+# 作図用のオブジェクトを初期化
+id_vec <- 1:N
+
+# 値の挿入とヒープ化
+iter <- 0
+for(n in 2:N) {
+  
+  # 最後尾に要素を追加
+  a <- c(a, initial_a[n])
+  i <- n
+  
+  # 要素を追加した数列を格納
+  tmp_df <- tibble::tibble(
+    step  = iter + 0.5, # (挿入操作は0.5とする)
+    id    = id_vec, 
+    index = c(1:n, rep(NA, times = N-n)), 
+    value = c(a, initial_a[(n+1):N])[1:N], 
+    target_flag = index %in% i, # 挿入対象
+    insert_flag = !is.na(index)
+  )
+  
+  # 数列を記録
+  trace_df <- dplyr::bind_rows(trace_df, tmp_df)
+  
+  # ヒープ化
+  break_flag <- FALSE
+  while(i > 1) {
+    
+    # 試行回数を更新
+    iter <- iter + 1
+    
+    # 親のインデックスを計算
+    parent_idx <- i %/% 2
+    
+    # 親が子未満なら親子を入替
+    if(a[parent_idx] < a[i]) {
+      a[1:n]      <- replace(x = a, list = c(i, parent_idx), values = a[c(parent_idx, i)])
+      id_vec[1:n] <- replace(x = id_vec[1:n], list = c(i, parent_idx), values = id_vec[c(parent_idx, i)])
+    } else {
+      break_flag <- TRUE
+    }
+    
+    # 要素を入れ替えた数列を格納
+    tmp_df <- tibble::tibble(
+      step  = iter, # (入替操作は1とする)
+      id    = id_vec, 
+      index = c(1:n, rep(NA, times = N-n)), 
+      value = c(a, initial_a[(n+1):N])[1:N], 
+      target_flag = index %in% c(i, parent_idx), # 入替対象
+      insert_flag = !is.na(index)
+    )
+    
+    # 数列を記録
+    trace_df <- dplyr::bind_rows(trace_df, tmp_df)
+    
+    # 親が子以上なら終了
+    if(break_flag) break
+    
+    # 挿入位置を親の位置に更新
+    i <- parent_idx
+    
+    # 途中経過を表示
+    print(paste0("--- step: ", iter, " ---"))
+    print(a)
+  }
+}
+```
+
+　値の挿入時と要素の比較・入替時に、数列やインデックスをデータフレームに保存します。要素の入れ替えが行われなかった場合も数列を記録します。  
+　この例では、挿入時の試行回数のカウントを0.5とします。（挿入時も1でカウントした方が作図処理が簡単ですが、「ヒープ化の可視化」の図と比較する際に、値の大小比較回数を比べるためです。） 
+　各試行における未挿入要素もデータフレームに格納しておき、`insert_flag` 列で区別します。  
+<br>
+
+　各試行の二分木のグラフを切り替えて推移を確認します。
+
+　試行ごとの頂点の描画用のデータフレームを作成します。
+
+```{r}
+# 未挿入要素のプロット位置を設定
+max_y <- floor(log2(N)) + 1
+
+# 頂点の座標を作成
+trace_vertex_df <- dplyr::bind_rows(
+  # 挿入済み要素の座標
+  trace_df |> 
+    dplyr::filter(insert_flag) |> # 挿入済み要素を抽出
+    dplyr::group_by(step) |> # 座標計算用
+    dplyr::mutate(
+      depth   = floor(log2(index)), # 縦方向の頂点位置
+      col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
+    ) |> 
+    dplyr::ungroup(), 
+  # 未挿入要素の座標
+  trace_df |> 
+    dplyr::filter(!insert_flag) |> # 未挿入要素を抽出
+    dplyr::mutate(
+      depth = max_y, # 縦方向の頂点位置
+      coord_x = id / (N + 1) # 横方向の頂点位置
+    )
+) |> 
+  dplyr::arrange(step, index)
+trace_vertex_df
+```
+
+　「ヒープ化の可視化」のときと同様に作成した挿入済み(ヒープ化対象)要素の座標データと、未挿入要素の座標データを作成して結合します。未挿入要素のプロット位置を `max_y` とします。  
+
+　試行ごとの辺の描画用のデータフレームを作成します。
+
+```{r}
+# 辺の座標を作成
+trace_edge_df <- dplyr::bind_rows(
+  # 子の座標
+  trace_vertex_df |> 
+    dplyr::filter(insert_flag, step > 0, depth > 0) |> # 挿入済み要素を抽出、初期値・根を除去
+    dplyr::mutate(
+      edge_id    = index, 
+      edge_label = paste0("step: ", step, ", edge: ", edge_id) # フレームごとに描画用
+    ), 
+  # 親の座標
+  trace_vertex_df |> 
+    dplyr::filter(insert_flag, step > 0, depth > 0) |> # 挿入済み要素を抽出、初期値・根を除去
+    dplyr::mutate(
+      edge_id    = index, # 子インデックス
+      edge_label = paste0("step: ", step, ", edge: ", edge_id), # フレームごとに描画用
+      depth   = depth - 1, # 縦方向の頂点位置
+      index   = index %/% 2, # 親インデックス
+      col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向の頂点位置
+    ), 
+  tibble::tibble(
+    step = 0
+  ) # (フレーム順の謎バグ回避用)
+) |> 
+  dplyr::arrange(step, edge_id, index)
+trace_edge_df
+```
+
+　段階的に増える頂点(要素)の数に応じて、辺の座標を作成します。  
+
+　インデックスラベルの描画用のデータフレームを作成します。
+
+```{r}
+# インデックスラベルの座標を作成
+d <- 0.6
+index_df <- trace_vertex_df |> 
+  dplyr::filter(insert_flag, step == max(step)) |> # 挿入済み要素・1試行分のデータを抽出
+  dplyr::mutate(
+    offset = dplyr::if_else(
+      condition = index%%2 == 0, true = 0.5+d, false = 0.5-d
+    ) # ラベル位置を左右にズラす
+  ) |> 
+  dplyr::select(!step) # フレーム遷移の影響から外す
+index_df
+```
+
+　「ヒープ化の可視化」のときと同様に処理します。ただし、こちらは最終結果(全ての要素がヒープに挿入された試行)の座標データを取り出して使います。  
+
+　挿入対象と入れ替え対象の頂点の描画用のデータフレームを作成します。
+
+```{r}
+# 試行番号を取得
+step_vec <- unique(trace_df[["step"]])
+
+# 入替対象の頂点の座標を作成
+target_vertex_df <- trace_vertex_df |> 
+  dplyr::filter(target_flag) |> # 挿入・入替対象を抽出
+  dplyr::mutate(
+    frame_id = dplyr::dense_rank(step), # 試行回数の抽出用
+    step     = step_vec[frame_id] # 表示フレームを調整
+  ) |> 
+  dplyr::arrange(step, index)
+target_vertex_df
+```
+
+　各試行の頂点の座標データ `trace_vertex_df` から、各試行における挿入対象または入れ替え対象の要素の座標データ(`target_flag` 列が `TRUE` の行)を取り出します。  
+　1試行早く表示するために、`step` 列の値を1つ前の値に置き換えます。（挿入時は試行番号を0.5刻みでカウントしているので-1では意図通りに描画されません。）  
+
+　入れ替え対象の頂点を結ぶ辺の描画用のデータフレームを作成します。
+
+```{r}
+# 入替対象の辺の座標を作成
+target_edge_df <- trace_vertex_df |> 
+  dplyr::filter(target_flag) |> # 挿入・入替対象を抽出
+  dplyr::mutate(
+    frame_id = dplyr::dense_rank(step), # 試行回数の抽出用
+  ) |> 
+  dplyr::filter(step%%1 == 0) |> # 入替対象を抽出(挿入対象を除去)
+  dplyr::group_by(step) |> # 辺IDの作成用
+  dplyr::mutate(
+    edge_label = paste0("step: ", step, ", id: ", min(index)) # 線分間の干渉回避用
+  ) |> 
+  dplyr::ungroup() |> 
+  dplyr::mutate(
+    step = step_vec[frame_id] # 表示フレームを調整
+  ) |> 
+  dplyr::arrange(step, index)
+target_edge_df
+```
+
+　試行ID(試行回数に対する通し番号)を割り当ててから、挿入時のデータ(`step` 列が小数点以下の値を持つ行)を取り除いて、試行回数(フレーム用の値)を1つ前の値に置き換えます。  
+
+　値の挿入とヒープ化の推移のアニメーションを作成します。
+
+```{r}
+# ヒープ化のアニメーションを作図
+graph <- ggplot() + 
+  geom_rect(mapping = aes(xmin = 0, xmax = 1, ymin = max_y-0.25, ymax = max_y+0.2), 
+            fill = "orange", color = "orange", alpha = 0.1, linetype ="dashed") + # 数列枠
+  geom_path(data = trace_edge_df,
+            mapping = aes(x = coord_x, y = depth, group = edge_label),
+            linewidth = 1) + # 辺
+  geom_path(data = target_edge_df,
+            mapping = aes(x = coord_x, y = depth, group = edge_label),
+            color = "red", linewidth = 1, linetype = "dashed") + # 入替対象の辺
+  geom_point(data = target_vertex_df,
+             mapping = aes(x = coord_x, y = depth, group = step),
+             size = 14, color = "red", alpha = 0.5) + # 挿入・入替対象の頂点
+  geom_point(data = trace_vertex_df,
+             mapping = aes(x = coord_x, y = depth, group = id),
+             size = 12, shape = "circle filled", fill = "white", stroke = 1) + # 頂点
+  geom_text(data = trace_vertex_df,
+            mapping = aes(x = coord_x, y = depth, label = as.character(value), group = id),
+            size = 5) + # 値ラベル
+  geom_text(data = index_df,
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset),
+            size = 4, vjust = -1.7, color = "green4") + # インデックスラベル:(ツリー用)
+  geom_text(data = index_df,
+            mapping = aes(x = index/(N+1), y = max_y, label = index),
+            size = 4, hjust = 1.1, vjust = -1.7, color = "green4") + # インデックスラベル:(数列用)
+  gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
+  gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
+  scale_x_continuous(labels = NULL) + 
+  scale_y_reverse(breaks = 0:max_y, labels = c(as.character(0:(max_y-1)), ""), minor_breaks = FALSE) + 
+  coord_cartesian(xlim = c(0, 1), ylim = c(max_y, 0)) + 
+  labs(title = "heapify", 
+       subtitle = "step: {next_state}", 
+       x = "", y = "depth")
+
+# フレーム数を取得
+frame_num <- trace_df[["step"]] |> 
+  unique() |> 
+  length()
+
+# 遷移フレーム数を指定
+s <- 20
+
+# gif画像を作成
+gganimate::animate(
+  plot = graph, 
+  nframes = (frame_num + 2)*s, start_pause = s, end_pause = s, fps = 20, 
+  width = 1200, height = 800, 
+  renderer = gganimate::gifski_renderer()
+)
+```
+
+　挿入対象または入替対象の頂点を赤色の丸、未挿入の要素をオレンジ色の枠の塗りつぶしで示します。
+
+　数列の要素を1つずつヒープの最後尾に挿入して、それぞれヒープ条件を満たすまで挿入値とその親を入れ替えていくことで、数列全体がヒープ化されるのを確認できます。  
+　数列全体をヒープとして用いた場合と比べて、ヒープ用のオブジェクト(メモリ)が必要で、操作の回数が増えるのを確認できます。  
+<br>
+
+
+## 最大値の削除
+
+　最後は、ヒープの最大値を削除する操作の実装と可視化を行います。  
+<br>
+
+
+### 最大値の削除の実装
+
+　二分ヒープの最大値の削除のアルゴリズムを関数として実装します。  
+<br>
+
+　最大値の削除を実装します。
+
+```{r}
+# 最大値の削除の実装
+pop <- function(vec) {
+  
+  # 削除後の要素数を取得
+  N <- length(vec) - 1
+  
+  # 最後尾(挿入要素)の値を取得
+  val <- vec[N+1]
+  
+  # 最後尾の値を削除
+  vec <- vec[-(N+1)]
+  
+  # 根(親)のインデックスを設定
+  i <- 1
+  
+  # ヒープ化
+  while(i*2 <= N) { # (葉に達するまで)
+    
+    # 左側の子のインデックスを計算
+    child_idx <- i * 2
+    
+    # 値が大きい方の子のインデックスを設定
+    if(child_idx+1 <= N & vec[child_idx+1] > vec[child_idx]) { # (&の左がFALSEだと右が処理されずNAにならない)
+      child_idx <- child_idx + 1
+    }
+    
+    # 子が親以下なら終了
+    if(vec[child_idx] <= val) break
+    
+    # 親と子を入替
+    vec[i] <- vec[child_idx] # 子の値を親の位置に移動
+    i      <- child_idx      # 挿入位置を子の位置に更新
+  }
+  
+  # 値を挿入
+  vec[i] <- val
+  
+  # 数列を出力
+  return(vec)
+}
+```
+
+　ヒープ化済みの数列を `vec`、削除後の要素数を `N`、挿入する値(最後尾の値)を `val`、値の挿入位置(インデックス)を `i` とします。  
+　`vec` の(先頭ではなく)最後尾の要素を削除して、`i` の初期値として先頭(最大値)のインデックスを設定します。この操作が、最大値の削除と、最後尾の要素の先頭への挿入に対応します。  
+　`i` 番目の頂点(要素)の2つの子の内、値が大きい方のインデックスを `childe_idx` として計算します。頂点 $v_i$ の子 $v_j, v_{j+1}$ のインデックスは $j = 2 i$ で求まります。  
+
+　挿入する値 `val` と子の値 `vec[child_idx]` を大小比較していき、挿入位置 `i` を探索します。  
+　挿入する値が小さければ、`vec` の `child_idx` 番目の値を `i` 番目に複製し、挿入位置 `i` を `child_idx` に更新します。この操作が、親子要素の入れ替えに対応します。ただしこの時点では、`vec` の `i, child_idx` 番目が同じ値です。  
+　「子の値が挿入値以下」または「挿入位置が葉(子がない)」であれば、ループ処理を終了して、`vec` の `i` 番目に `val` を代入します。この操作によって入れ替えが完了します。  
+
+　アルゴリズムの詳しい解説は、本のcode 10.5(後半)などを参照してください。  
+<br>
+
+　実装した関数を試してみます。  
+
+　ヒープを作成して、最大値を削除します。
+
+```{r}
+# 要素数を指定
+N <- 25
+
+# (簡易的に)数列を作成
+a <- 1:N
+
+# ヒープ化
+a <- heapify(a)
+
+# 最大値を削除してヒープ化
+a <- pop(a)
+a; length(a)
+```
+
+　要素数が1つ減ります。  
+
+　「ヒープの可視化」のときのコードで、最大値を削除したヒープをバイナリツリーで確認します。
+
+```{r, echo=FALSE, fig.width=8, fig.height=6, dpi=100}
+### 資料作成用:(再掲)
+
+# ノードの座標を作成
+d <- 0.6
+vertex_df <- tibble::tibble(
+  value = a, 
+  index = 1:length(a), 
+  depth = floor(log2(index)), # 縦方向のノード位置
+  col_idx = index - 2^depth + 1, # 深さごとのノード番号
+  coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向のノード位置
+  label_offset = dplyr::if_else(
+    condition = index%%2 == 0, true = 0.5+d, false = 0.5-d
+  ) # ラベル位置を左右にズラす
+)
+
+# エッジの座標を作成
+edge_df <- dplyr::bind_rows(
+  # 子ノードの座標
+  vertex_df |> 
+    dplyr::filter(depth > 0) |> # 根を除去
+    dplyr::mutate(
+      edge_id   = index, 
+      node_type = "childe" # (確認用)
+    ), 
+  # 親ノードの座標
+  vertex_df |> 
+    dplyr::filter(depth > 0) |> # 根を除去
+    dplyr::mutate(
+      edge_id   = index, 
+      node_type = "parent", # (確認用)
+      depth   = depth - 1, # 縦方向のノード位置
+      index   = index %/% 2, 
+      col_idx = index - 2^depth + 1, # 深さごとのノード番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向のノード位置
+    )
+) |> 
+  dplyr::select(!label_offset) |> 
+  dplyr::arrange(edge_id, depth)
+
+# ツリーの高さを取得
+max_h <- floor(log2(N))
+
+# 二分木を作図
+d <- 0.1
+ggplot() + 
+  geom_path(data = edge_df, 
+            mapping = aes(x = coord_x, y = depth, group = edge_id), 
+            linewidth = 1) + # 辺
+  geom_point(data = vertex_df, 
+             mapping = aes(x = coord_x, y = depth), 
+             size = 12, shape = "circle filled", fill = "white", stroke = 1) + # 頂点
+  geom_text(data = vertex_df, 
+            mapping = aes(x = coord_x, y = depth, label = value), 
+            size = 5) + # 値ラベル
+  geom_text(data = vertex_df, 
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = label_offset), 
+            size = 4, vjust = -2, color = "green4") + # 位置ラベル
+  scale_x_continuous(labels = NULL, name = "") + 
+  scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
+  coord_cartesian(xlim = c(0, 1), ylim = c(max_h+d, -d)) + 
+  labs(title = "binary heap", 
+       subtitle = "pop", 
+       y = "depth")
+```
+
+　「ヒープの可視化」のときの図から、この図に変化します。  
+<br>
+
+
+### 最大値の削除の可視化
+
+　続いて、二分ヒープの最大値の削除のアルゴリズムをグラフで確認します。  
+<br>
+
+　アルゴリズムに従いヒープ化を行って、作図用のデータを作成します。
+
+　要素数を指定して、ヒープを作成します。
+
+```{r}
+# 要素数を指定
+initial_N <- 20
+
+# ヒープを作成
+initial_a <- sample(x = 1:initial_N, size = initial_N, replace = FALSE) |> 
+  heapify()
+initial_a
+```
+
+　`N + 1` 個の値を作成して、`heapify()` でヒープ化します。
+
+　最大値を削除します。
+
+```{r}
+# 最大値を削除して、最後尾を先頭に挿入
+a <- c(initial_a[initial_N], initial_a[-c(1, initial_N)])
+
+# 削除後の要素数を取得
+N <- length(a)
+a; N
+```
+
+　ヒープ(数列)の先頭(最大値)の要素を削除して、最後尾の要素を先頭に挿入します。  
+
+　数列の記録用のデータフレームを作成します。
+
+```{r}
+# 数列を格納
+trace_df <- dplyr::bind_rows(
+  # 初期値
+  tibble::tibble(
+    step  = 0, 
+    id    = 1:initial_N, 
+    index = id, 
+    value = initial_a, 
+    target_flag = FALSE, 
+    heap_flag   = TRUE
+  ), 
+  # 削除後
+  tibble::tibble(
+    step  = 1, 
+    id    = c(initial_N, 2:N, 1), 
+    index = 1:initial_N, 
+    value = c(a, NA), 
+    target_flag = index %in% c(1, initial_N), # 挿入・削除対象
+    heap_flag   = c(rep(TRUE, times = N), FALSE) # ヒープ要素
+  )
+)
+trace_df
+```
+
+　初期値(削除前)と削除後の数列をデータフレームに格納します。ただし削除要素の作図用に、削除後の最大値に対応する値(行)を含めておきます。以降の処理では含めません。  
+
+　1試行ずつ入れ替え処理を行い、数列を記録します。
+
+```{r}
+# 挿入要素のインデックスを設定
+i <- 1
+
+# 作図用のオブジェクトを初期化
+id_vec <- c(initial_N, 2:N)
+
+# ヒープ化
+iter <- 1
+break_flag <- FALSE
+while(i*2 <= N) {
+  
+  # 試行回数を更新
+  iter <- iter + 1
+  
+  # 値が大きい方の子のインデックスを設定
+  child_idx <- i * 2 # 左側の子
+  if(child_idx+1 <= N & a[child_idx+1] > a[child_idx]) {
+    child_idx <- child_idx + 1
+  }
+  
+  # 子が親より大きいなら入替
+  if(a[child_idx] > a[i]) {
+    a[1:N]      <- replace(x = a, list = c(i, child_idx), values = a[c(child_idx, i)])
+    id_vec[1:N] <- replace(x = id_vec, list = c(i, child_idx), values = id_vec[c(child_idx, i)])
+  } else {
+    break_flag <- TRUE
+  }
+  
+  # 数列を格納
+  tmp_df <- tibble::tibble(
+    step  = iter, 
+    id    = id_vec, 
+    index = 1:N, 
+    value = a, 
+    target_flag = index %in% c(i, i*2, i*2+1), # 入替対象
+    heap_flag   = TRUE
+  )
+  
+  # 数列を記録
+  trace_df <- dplyr::bind_rows(trace_df, tmp_df)
+  
+  # 挿入位置を子の位置に更新
+  i <- child_idx
+  
+  # 途中経過を表示
+  #print(paste0("--- step: ", iter, " ---"))
+  #print(a)
+}
+```
+
+　「最大値を削除の実装」のときと同様にして要素を入れ替えていき、試行ごとに数列やインデックスをデータフレームに保存します。  
+<br>
+
+　各試行の二分木のグラフを切り替えて推移を確認します。
+
+　試行ごとの頂点の描画用のデータフレームを作成します。
+
+```{r}
+# 全ての頂点の座標を作成
+tmp_vertex_df <- trace_df |> 
+  dplyr::group_by(step) |> # 座標計算用
+  dplyr::mutate(
+    depth   = floor(log2(index)), # 縦方向の頂点位置
+    col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
+  ) |> 
+  dplyr::ungroup()
+
+# ヒープの頂点の座標を作成
+trace_vertex_df <- tmp_vertex_df |> 
+  dplyr::filter(heap_flag) # ヒープ要素を抽出(最大値を除去)
+trace_vertex_df
+```
+
+　「ヒープ化の可視化」のときのコードで作成したデータフレームを `tmp_vertex_df` としておきます。  
+　`tmp_vertex_df` から最大値(`heap_flag` が `FALSE` の行)を取り除いたデータフレームを `trace_vertex_df` とします。  
+
+　「ヒープ化の可視化」のときのコードで、辺、インデックラベルの描画用のデータフレーム(`edge_df`・`index_df`)を作成します。
+
+```{r, echo=FALSE}
+### 資料作成用:(再掲)
+
+# 辺の座標を作成
+edge_df <- dplyr::bind_rows(
+  # 子の座標
+  trace_vertex_df |> 
+    dplyr::filter(step == 0, depth > 0) |> # 1試行分のデータを抽出・根を除去
+    dplyr::mutate(
+      edge_id = index
+    ), 
+  # 親の座標
+  trace_vertex_df |> 
+    dplyr::filter(step == 0, depth > 0) |> # 1試行分のデータを抽出・根を除去
+    dplyr::mutate(
+      edge_id = index, # 子インデックス
+      depth   = depth - 1, # 縦方向の頂点位置
+      index   = index %/% 2, # 親インデックス
+      col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向の頂点位置
+    )
+) |> 
+  dplyr::select(!step) |> # フレーム遷移の影響から外す
+  dplyr::arrange(edge_id, depth)
+
+# インデックスラベルの座標を作成
+d <- 0.6
+index_df <- trace_vertex_df |> 
+  dplyr::filter(step == 0) |> # 1試行分のデータを抽出
+  dplyr::mutate(
+    offset = dplyr::if_else(
+      condition = index%%2 == 0, true = 0.5+d, false = 0.5-d
+    ) # ラベル位置を左右にズラす
+  ) |> 
+  dplyr::select(!step) # フレーム遷移の影響から外す
+```
+
+
+　入れ替え対象の頂点と辺の描画用のデータフレームを作成します。
+
+```{r}
+# 入替対象の頂点の座標を作成
+target_vertex_df <- tmp_vertex_df |> 
+  dplyr::filter(target_flag) |> # 入替対象の親を抽出
+  dplyr::mutate(
+    step = step - 1 # 表示フレームを調整
+  ) |> 
+  dplyr::arrange(step, index)
+
+# 入替対象の辺の座標を作成
+target_edge_df <- dplyr::bind_rows(
+  # 親の座標
+  target_vertex_df |> 
+    dplyr::group_by(step) |> 
+    dplyr::filter(index == min(index)) |> # 親を抽出
+    dplyr::ungroup() |> 
+    dplyr::mutate(
+      n = dplyr::if_else(
+        condition = step == 0, true = 1, false = 2
+      )
+    ) |> 
+    tidyr::uncount(weights = n, .id = "childe_id") |> # 子の数に複製
+    dplyr::mutate(
+      childe_id = childe_id - 1, # 行番号を子IDに変換
+      edge_id   = dplyr::if_else(
+        condition = step == 0, true = initial_N, false = index * 2 + childe_id # 子インデックス
+      )
+    ) |> 
+    dplyr::filter(edge_id <= initial_N), # 子がなければ除去
+  # 子の座標
+  target_vertex_df |> 
+    dplyr::group_by(step) |> 
+    dplyr::filter(index != min(index)) |> # 子を抽出
+    dplyr::ungroup() |> 
+    dplyr::mutate(
+      edge_id = index
+    )
+) |> 
+  dplyr::arrange(step, index)
+target_edge_df
+```
+
+　最大値を含めた頂点の座標データ `tmp_vertex_df` を用いて、「ヒープ化の可視化」のときと同様にして `trace_vertex_df` を作成します。  
+　「ヒープ化の可視化」のときと同様にして `trace_edge_df` を作成します。ただし、最大値の削除操作では子がなく最後尾との1組なので、削除時(値を調整したので `step` 列が `0` の行)は複製しません。  
+
+　ヒープの最大値を削除した際の推移のアニメーションを作成します。
+
+```{r}
+# ヒープ化のアニメーションを作図
+max_h <- floor(log2(N))
+graph <- ggplot() + 
+  geom_path(data = edge_df, 
+            mapping = aes(x = coord_x, y = depth, group = edge_id), 
+            linewidth = 1) + # 辺
+  geom_path(data = target_edge_df,
+            mapping = aes(x = coord_x, y = depth, group = edge_id),
+            color = "red", linewidth = 1, linetype = "dashed") + # 入替対象の辺
+  geom_point(data = target_vertex_df,
+             mapping = aes(x = coord_x, y = depth, group = step),
+             size = 14, color = "red", alpha = 0.5) + # 入替対象の頂点
+  geom_point(data = trace_vertex_df, 
+             mapping = aes(x = coord_x, y = depth, group = id), 
+             size = 12, shape = "circle filled", fill = "white", stroke = 1) + # 頂点
+  geom_text(data = trace_vertex_df, 
+            mapping = aes(x = coord_x, y = depth, label = as.character(value), group = id), 
+            size = 5) + # 値ラベル
+  geom_text(data = index_df, 
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset), 
+            size = 4, vjust = -1.7, color = "green4") + # インデックスラベル
+  gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
+  gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
+  scale_x_continuous(labels = NULL) + 
+  scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
+  coord_cartesian(xlim = c(0, 1)) + 
+  labs(title = "heapify : pop (down-heap)", 
+       subtitle = "step: {next_state}", 
+       x = "", y = "depth")
+
+# フレーム数を取得
+frame_num <- max(trace_df[["step"]]) + 1
+
+# 遷移フレーム数を指定
+s <- 20
+
+# gif画像を作成
+gganimate::animate(
+  plot = graph, 
+  nframes = (frame_num + 2)*s, start_pause = s, end_pause = s, fps = 20, 
+  width = 1200, height = 600, 
+  renderer = gganimate::gifski_renderer()
+)
+```
+
+　削除対象または入替対象の頂点を赤色の塗りつぶしで示します。  
+
+　ヒープ化されている元の要素数を $N$ とすると、$1$ 番目(先頭・根)の頂点(要素)を削除して代わりに $N$ 番目(最後尾)の要素を挿入します。ヒープ条件を満たさなくなる場合があるので、先頭に挿入した(元最後尾の)値と子の値を比較・入替を繰り返します。  
+　ヒープ条件を満たすまで、挿入値とその子を入れ替えていくことでヒープ化されるのを確認できます。  
+<br>
+
+　この記事では、ヒープ化を実装しました。次の記事では、ヒープソートを実装します。  
+<br>
