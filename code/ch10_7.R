@@ -266,7 +266,7 @@ for(i in max_i:1) {
 trace_vertex_df <- trace_df |> 
   dplyr::group_by(step) |> # 座標計算用
   dplyr::mutate(
-    depth   = floor(log2(index)), # 頂点ごとの深さ
+    depth   = floor(log2(index)), # 縦方向の頂点位置
     col_idx = index - 2^depth + 1, # 深さごとの頂点番号
     coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
   ) |> 
@@ -285,7 +285,7 @@ edge_df <- dplyr::bind_rows(
     dplyr::filter(step == 0, depth > 0) |> # 1試行分のデータを抽出・根を除去
     dplyr::mutate(
       edge_id = index, # 子インデックス
-      depth   = depth - 1, # 頂点ごとの深さ
+      depth   = depth - 1, # 縦方向の頂点位置
       index   = index %/% 2, # 親インデックス
       col_idx = index - 2^depth + 1, # 深さごとの頂点番号
       coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向の頂点位置
@@ -340,7 +340,7 @@ target_edge_df <- dplyr::bind_rows(
   # 子の座標
   target_vertex_df |> 
     dplyr::group_by(step) |> 
-    dplyr::filter(index != min(index)) |> # 親を抽出
+    dplyr::filter(index != min(index)) |> # 子を抽出
     dplyr::ungroup() |> 
     dplyr::mutate(
       edge_id = index
@@ -349,6 +349,7 @@ target_edge_df <- dplyr::bind_rows(
   dplyr::arrange(step, index)
 
 # ヒープ化のアニメーションを作図
+max_h <- floor(log2(N))
 graph <- ggplot() + 
   geom_path(data = edge_df, 
             mapping = aes(x = coord_x, y = depth, group = edge_id), 
@@ -374,7 +375,7 @@ graph <- ggplot() +
   gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
   gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
   scale_x_continuous(labels = NULL) + 
-  scale_y_reverse(breaks = 0:max(trace_vertex_df[["depth"]], na.rm = TRUE), minor_breaks = FALSE) + 
+  scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
   coord_cartesian(xlim = c(0, 1)) + 
   labs(title = "heapify", 
        subtitle = "step: {next_state}", 
@@ -448,7 +449,7 @@ a; length(a)
 ### ・可視化 -----
 
 # 要素数を指定
-initial_N <- 50
+initial_N <- 40
 
 # ヒープを作成
 initial_a <- sample(x = 1:initial_N, size = initial_N, replace = FALSE) |> 
@@ -470,14 +471,16 @@ trace_df <- dplyr::bind_rows(
     step  = 0, 
     id    = 1:initial_N, 
     index = id, 
-    value = initial_a
+    value = initial_a, 
+    target_flag = FALSE
   ), 
   # 挿入後
   tibble::tibble(
     step  = 1, 
     id    = 1:N, 
     index = id, 
-    value = a
+    value = a, 
+    target_flag = index == N # 挿入対象
   )
 )
 
@@ -486,10 +489,10 @@ i <- N
 
 # 作図用のオブジェクトを初期化
 id_vec <- 1:N
-trace_target_vec <- i
 
 # ヒープ化
 iter <- 1
+break_flag <- FALSE
 while(i > 1) {
   
   # 試行回数を更新
@@ -498,30 +501,31 @@ while(i > 1) {
   # 親のインデックスを計算
   parent_idx <- i %/% 2
   
-  # 親が子以上なら終了
-  if(a[parent_idx] >= a[i]) {
-    
-    # 値を記録
-    trace_target_vec <- c(trace_target_vec, parent_idx)
-    
-    break
-  }
+  # 親のインデックスを計算
+  parent_idx <- i %/% 2
   
-  # 子と親を入替
-  a[1:N]      <- replace(x = a, list = c(i, parent_idx), values = a[c(parent_idx, i)])
-  id_vec[1:N] <- replace(x = id_vec, list = c(i, parent_idx), values = id_vec[c(parent_idx, i)])
+  # 親が子未満なら親子を入替
+  if(a[parent_idx] < a[i]) {
+    a[1:N]      <- replace(x = a, list = c(i, parent_idx), values = a[c(parent_idx, i)])
+    id_vec[1:N] <- replace(x = id_vec[1:n], list = c(i, parent_idx), values = id_vec[c(parent_idx, i)])
+  } else {
+    break_flag <- TRUE
+  }
   
   # 数列を格納
   tmp_df <- tibble::tibble(
     step  = iter, 
     id    = id_vec, 
     index = 1:N, 
-    value = a
+    value = a, 
+    target_flag = index %in% c(i, parent_idx) # 入替対象
   )
   
-  # 値を記録
+  # 数列を記録
   trace_df <- dplyr::bind_rows(trace_df, tmp_df)
-  trace_target_vec <- c(trace_target_vec, parent_idx)
+  
+  # 親が子以上なら終了
+  if(break_flag) break
   
   # 挿入位置を親の位置に更新
   i <- parent_idx
@@ -536,29 +540,29 @@ while(i > 1) {
 trace_vertex_df <- trace_df |> 
   dplyr::group_by(step) |> # 座標計算用
   dplyr::mutate(
-    depth   = floor(log2(index)), # ノードごとの深さ
-    col_idx = index - 2^depth + 1, # 深さごとのノード番号
-    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向のノード位置
+    depth   = floor(log2(index)), # 縦方向の頂点位置
+    col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
   ) |> 
   dplyr::ungroup()
 
 # 辺の座標を作成
 edge_df <- dplyr::bind_rows(
-  # 子ノードの座標
+  # 子の座標
   trace_vertex_df |> 
     dplyr::filter(step == 1, depth > 0) |> # 1試行分のデータを抽出・根を除去
     dplyr::mutate(
       edge_id = index
     ), 
-  # 親ノードの座標
+  # 親の座標
   trace_vertex_df |> 
     dplyr::filter(step == 1, depth > 0) |> # 1試行分のデータを抽出・根を除去
     dplyr::mutate(
       edge_id = index, # 子インデックス
-      depth   = depth - 1, # ノードごとの深さ
+      depth   = depth - 1, # 縦方向の頂点位置
       index   = index %/% 2, # 親インデックス
-      col_idx = index - 2^depth + 1, # 深さごとのノード番号
-      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向のノード位置
+      col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向の頂点位置
     )
 ) |> 
   dplyr::select(!step) |> # フレーム遷移の影響から外す
@@ -575,53 +579,32 @@ index_df <- trace_vertex_df |>
   ) |> 
   dplyr::select(!step) # フレーム遷移の影響から外す
 
-# ステップ数を取得
-max_step <- length(trace_target_vec)
-
 # 入替対象の頂点の座標を作成
-target_df <- dplyr::bind_rows(
-  # 親ノードの座標
-  tibble::tibble(
-    step  = 1:max_step, 
-    index = trace_target_vec, # 入替元のインデックス
-    edge_id = index
-  ), 
-  # 子ノードの座標
-  tibble::tibble(
-    step  = 2:max_step, 
-    index = trace_target_vec[-max_step],#c(NA, trace_target_vec[-max_step]), # 入替元の子インデックス
-    edge_id = trace_target_vec[-1]
-  )
-) |> 
+target_vertex_df <- trace_vertex_df |> 
+  dplyr::filter(target_flag) |> # 入替対象の親を抽出
   dplyr::mutate(
-    step = step - 1, # 表示フレームを調整
-    depth   = floor(log2(index)), 
-    col_idx = index - 2^depth + 1, 
-    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), 
+    step = step - 1 # 表示フレームを調整
   ) |> 
   dplyr::arrange(step, index)
 
 # 入替対象の辺の座標を作成
-target_edge_df <- dplyr::bind_rows(
-  target_df, 
-  target_df |> 
-    dplyr::filter(step == 0)
-) # (原因不明の警告文対策)
-
+target_edge_df <- target_vertex_df |> 
+  dplyr::bind_rows(
+    target_vertex_df |> 
+      dplyr::filter(step == 0)
+  ) # (警告文回避用に挿入値を複製)
 
 # ヒープ化のアニメーションを作図
+max_h <- floor(log2(N))
 graph <- ggplot() + 
-  geom_text(data = index_df,
-            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset),
-            size = 4, vjust = -1.7, color = "blue") + # インデックスラベル
   geom_path(data = edge_df,
             mapping = aes(x = coord_x, y = depth, group = edge_id),
             linewidth = 1) + # 辺
   geom_path(data = target_edge_df,
-            mapping = aes(x = coord_x, y = depth, group = edge_id),
+            mapping = aes(x = coord_x, y = depth, group = step),
             color = "red", linewidth = 1, linetype = "dashed") + # 入替対象の辺
-  geom_point(data = target_df,
-             mapping = aes(x = coord_x, y = depth, group = index),
+  geom_point(data = target_vertex_df,
+             mapping = aes(x = coord_x, y = depth, group = step),
              size = 14, color = "red", alpha = 0.5) + # 入替対象の頂点
   geom_point(data = trace_vertex_df,
              mapping = aes(x = coord_x, y = depth, group = id),
@@ -629,12 +612,15 @@ graph <- ggplot() +
   geom_text(data = trace_vertex_df,
             mapping = aes(x = coord_x, y = depth, label = as.character(value), group = id),
             size = 5) + # 値ラベル
+  geom_text(data = index_df,
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset),
+            size = 4, vjust = -1.7, color = "green4") + # インデックスラベル
   gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
   gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
   scale_x_continuous(labels = NULL) + 
-  scale_y_reverse(breaks = 0:max(trace_vertex_df[["depth"]], na.rm = TRUE), minor_breaks = FALSE) + 
+  scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
   coord_cartesian(xlim = c(0, 1)) + 
-  labs(title = "heapify : push", 
+  labs(title = "heapify : push (up-heap)", 
        subtitle = "step: {next_state}", 
        x = "", y = "depth")
 
@@ -663,37 +649,38 @@ initial_a <- sample(x = 1:N, size = N, replace = FALSE)
 
 
 # 1番目の要素を挿入
-a      <- initial_a[1]
-id_vec <- 1
+a <- initial_a[1]
 
 # 数列を格納
 trace_df <- tibble::tibble(
   step  = 0, # 試行番号
-  id    = 1, # 元のインデックス
-  index = 1, # 試行ごとのインデックス
-  value = a, # 要素
-  target_flag = FALSE # 挿入・入替対象:(初手FALSEの方が処理が楽)
+  id    = 1:N, # 元のインデックス
+  index = c(1, rep(NA, times = N-1)), # 試行ごとのインデックス:(未挿入はNAとする)
+  value = initial_a, # 要素:(未挿入要素も含める)
+  target_flag = FALSE, # 挿入・入替対象:(初手FALSEの方が処理が楽)
+  insert_flag = !is.na(index) # 挿入済み要素
 )
+
+# 作図用のオブジェクトを初期化
+id_vec <- 1:N
 
 # 値の挿入とヒープ化
 iter <- 0
 for(n in 2:N) {
   
   # 最後尾に要素を追加
-  a      <- c(a, initial_a[n])
-  id_vec <- c(id_vec, n)
-  i      <- n
+  a <- c(a, initial_a[n])
+  i <- n
   
-  # 数列を格納
+  # 要素を追加した数列を格納
   tmp_df <- tibble::tibble(
-    step  = iter + 0.5, 
+    step  = iter + 0.5, # (挿入操作は0.5とする)
     id    = id_vec, 
-    index = 1:n, 
-    value = a
-  ) |> 
-    dplyr::mutate(
-      target_flag = index == i # 挿入対象
-    )
+    index = c(1:n, rep(NA, times = N-n)), 
+    value = c(a, initial_a[(n+1):N])[1:N], 
+    target_flag = index %in% i, # 挿入対象
+    insert_flag = !is.na(index)
+  )
   
   # 数列を記録
   trace_df <- dplyr::bind_rows(trace_df, tmp_df)
@@ -716,16 +703,15 @@ for(n in 2:N) {
       break_flag <- TRUE
     }
     
-    # 数列を格納
+    # 要素を入れ替えた数列を格納
     tmp_df <- tibble::tibble(
-      step  = iter, 
+      step  = iter, # (入替操作は1とする)
       id    = id_vec, 
-      index = 1:n, 
-      value = a
-    ) |> 
-      dplyr::mutate(
-        target_flag = index %in% c(i, parent_idx) # 入替対象
-      )
+      index = c(1:n, rep(NA, times = N-n)), 
+      value = c(a, initial_a[(n+1):N])[1:N], 
+      target_flag = index %in% c(i, parent_idx), # 入替対象
+      insert_flag = !is.na(index)
+    )
     
     # 数列を記録
     trace_df <- dplyr::bind_rows(trace_df, tmp_df)
@@ -742,36 +728,47 @@ for(n in 2:N) {
   }
 }
 
+# 未挿入要素のプロット位置を設定
+max_y <- floor(log2(N)) + 1
 
 # 頂点の座標を作成
-trace_vertex_df <- trace_df |> 
-  dplyr::group_by(step) |> # 座標計算用
-  dplyr::mutate(
-    depth   = floor(log2(index)), # 頂点ごとの深さ
-    col_idx = index - 2^depth + 1, # 深さごとの頂点番号
-    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
-  ) |> 
-  dplyr::ungroup()
-
-# 試行番号を取得
-step_vec <- unique(trace_df[["step"]])
+trace_vertex_df <- dplyr::bind_rows(
+  # 挿入済み要素の座標
+  trace_df |> 
+    dplyr::filter(insert_flag) |> # 挿入済み要素を抽出
+    dplyr::group_by(step) |> # 座標計算用
+    dplyr::mutate(
+      depth   = floor(log2(index)), # 縦方向の頂点位置
+      col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
+    ) |> 
+    dplyr::ungroup(), 
+  # 未挿入要素の座標
+  trace_df |> 
+    dplyr::filter(!insert_flag) |> # 未挿入要素を抽出
+    dplyr::mutate(
+      depth = max_y, # 縦方向の頂点位置
+      coord_x = id / (N + 1) # 横方向の頂点位置
+    )
+) |> 
+  dplyr::arrange(step, index)
 
 # 辺の座標を作成
 trace_edge_df <- dplyr::bind_rows(
   # 子の座標
   trace_vertex_df |> 
-    dplyr::filter(step > 0, depth > 0) |> # 初期値・根を除去
+    dplyr::filter(insert_flag, step > 0, depth > 0) |> # 挿入済み要素を抽出、初期値・根を除去
     dplyr::mutate(
       edge_id    = index, 
       edge_label = paste0("step: ", step, ", edge: ", edge_id) # フレームごとに描画用
     ), 
   # 親の座標
   trace_vertex_df |> 
-    dplyr::filter(step > 0, depth > 0) |> # 初期値・根を除去
+    dplyr::filter(insert_flag, step > 0, depth > 0) |> # 挿入済み要素を抽出、初期値・根を除去
     dplyr::mutate(
       edge_id    = index, # 子インデックス
       edge_label = paste0("step: ", step, ", edge: ", edge_id), # フレームごとに描画用
-      depth   = depth - 1, # 頂点ごとの深さ
+      depth   = depth - 1, # 縦方向の頂点位置
       index   = index %/% 2, # 親インデックス
       col_idx = index - 2^depth + 1, # 深さごとの頂点番号
       coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向の頂点位置
@@ -785,7 +782,7 @@ trace_edge_df <- dplyr::bind_rows(
 # インデックスラベルの座標を作成
 d <- 0.6
 index_df <- trace_vertex_df |> 
-  dplyr::filter(step == max(step)) |> # 1試行分のデータを抽出
+  dplyr::filter(insert_flag, step == max(step)) |> # 挿入済み要素・1試行分のデータを抽出
   dplyr::mutate(
     offset = dplyr::if_else(
       condition = index%%2 == 0, true = 0.5+d, false = 0.5-d
@@ -793,11 +790,14 @@ index_df <- trace_vertex_df |>
   ) |> 
   dplyr::select(!step) # フレーム遷移の影響から外す
 
+# 試行番号を取得
+step_vec <- unique(trace_df[["step"]])
+
 # 入替対象の頂点の座標を作成
 target_vertex_df <- trace_vertex_df |> 
   dplyr::filter(target_flag) |> # 挿入・入替対象を抽出
   dplyr::mutate(
-    frame_id = dplyr::dense_rank(step), # 試行番号の抽出用
+    frame_id = dplyr::dense_rank(step), # 試行回数の抽出用
     step     = step_vec[frame_id] # 表示フレームを調整
   ) |> 
   dplyr::arrange(step, index)
@@ -806,7 +806,7 @@ target_vertex_df <- trace_vertex_df |>
 target_edge_df <- trace_vertex_df |> 
   dplyr::filter(target_flag) |> # 挿入・入替対象を抽出
   dplyr::mutate(
-    frame_id = dplyr::dense_rank(step), # 試行番号の抽出用
+    frame_id = dplyr::dense_rank(step), # 試行回数の抽出用
   ) |> 
   dplyr::filter(step%%1 == 0) |> # 入替対象を抽出(挿入対象を除去)
   dplyr::group_by(step) |> # 辺IDの作成用
@@ -822,9 +822,8 @@ target_edge_df <- trace_vertex_df |>
 
 # ヒープ化のアニメーションを作図
 graph <- ggplot() + 
-  geom_text(data = index_df,
-            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset),
-            size = 4, vjust = -1.7, color = "green4") + # インデックスラベル
+  geom_rect(mapping = aes(xmin = 0, xmax = 1, ymin = max_y-0.25, ymax = max_y+0.2), 
+            fill = "orange", color = "orange", alpha = 0.1, linetype ="dashed") + # 数列枠
   geom_path(data = trace_edge_df,
             mapping = aes(x = coord_x, y = depth, group = edge_label),
             linewidth = 1) + # 辺
@@ -840,11 +839,17 @@ graph <- ggplot() +
   geom_text(data = trace_vertex_df,
             mapping = aes(x = coord_x, y = depth, label = as.character(value), group = id),
             size = 5) + # 値ラベル
+  geom_text(data = index_df,
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset),
+            size = 4, vjust = -1.7, color = "green4") + # インデックスラベル:(ツリー用)
+  geom_text(data = index_df,
+            mapping = aes(x = index/(N+1), y = max_y, label = index),
+            size = 4, hjust = 1.1, vjust = -1.7, color = "green4") + # インデックスラベル:(数列用)
   gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
   gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
   scale_x_continuous(labels = NULL) + 
-  scale_y_reverse(breaks = 0:max(trace_vertex_df[["depth"]], na.rm = TRUE), minor_breaks = FALSE) + 
-  coord_cartesian(xlim = c(0, 1)) + 
+  scale_y_reverse(breaks = 0:max_y, labels = c(as.character(0:(max_y-1)), ""), minor_breaks = FALSE) + 
+  coord_cartesian(xlim = c(0, 1), ylim = c(max_y, 0)) + 
   labs(title = "heapify", 
        subtitle = "step: {next_state}", 
        x = "", y = "depth")
@@ -861,7 +866,7 @@ s <- 20
 gganimate::animate(
   plot = graph, 
   nframes = (frame_num + 2)*s, start_pause = s, end_pause = s, fps = 20, 
-  width = 1200, height = 600, 
+  width = 1200, height = 800, 
   renderer = gganimate::gifski_renderer()
 )
 
@@ -929,7 +934,7 @@ a; length(a)
 ### ・可視化 -----
 
 # 要素数を指定
-initial_N <- 50
+initial_N <- 20
 
 # ヒープを作成
 initial_a <- sample(x = 1:initial_N, size = initial_N, replace = FALSE) |> 
@@ -941,9 +946,6 @@ a <- c(initial_a[initial_N], initial_a[-c(1, initial_N)])
 # 削除後の要素数を取得
 N <- length(a)
 
-# 元のインデックスを作成
-id_vec <- c(initial_N, 2:N)
-
 # 数列を格納
 trace_df <- dplyr::bind_rows(
   # 初期値
@@ -951,14 +953,18 @@ trace_df <- dplyr::bind_rows(
     step  = 0, 
     id    = 1:initial_N, 
     index = id, 
-    value = initial_a
+    value = initial_a, 
+    target_flag = FALSE, 
+    heap_flag   = TRUE
   ), 
-  # 挿入後
+  # 削除後
   tibble::tibble(
     step  = 1, 
-    id    = id_vec, 
-    index = 1:N, 
-    value = a
+    id    = c(initial_N, 2:N, 1), 
+    index = 1:initial_N, 
+    value = c(a, NA), 
+    target_flag = index %in% c(1, initial_N), # 挿入・削除対象
+    heap_flag   = c(rep(TRUE, times = N), FALSE) # ヒープ要素
   )
 )
 
@@ -966,14 +972,15 @@ trace_df <- dplyr::bind_rows(
 i <- 1
 
 # 作図用のオブジェクトを初期化
-trace_target_vec <- i
+id_vec <- c(initial_N, 2:N)
 
 # ヒープ化
 iter <- 1
+break_flag <- FALSE
 while(i*2 <= N) {
   
   # 試行回数を更新
-  iter <- iter+ 1
+  iter <- iter + 1
   
   # 値が大きい方の子のインデックスを設定
   child_idx <- i * 2 # 左側の子
@@ -981,30 +988,26 @@ while(i*2 <= N) {
     child_idx <- child_idx + 1
   }
   
-  # 子が親以下なら終了
-  if(a[child_idx] <= a[i]) {
-    
-    # 値を記録
-    trace_target_vec <- c(trace_target_vec, child_idx)
-    
-    break
+  # 子が親より大きいなら入替
+  if(a[child_idx] > a[i]) {
+    a[1:N]      <- replace(x = a, list = c(i, child_idx), values = a[c(child_idx, i)])
+    id_vec[1:N] <- replace(x = id_vec, list = c(i, child_idx), values = id_vec[c(child_idx, i)])
+  } else {
+    break_flag <- TRUE
   }
-  
-  # 親と子を入替
-  a[1:N]      <- replace(x = a, list = c(i, child_idx), values = a[c(child_idx, i)])
-  id_vec[1:N] <- replace(x = id_vec, list = c(i, child_idx), values = id_vec[c(child_idx, i)])
   
   # 数列を格納
   tmp_df <- tibble::tibble(
     step  = iter, 
     id    = id_vec, 
     index = 1:N, 
-    value = a
+    value = a, 
+    target_flag = index %in% c(i, i*2, i*2+1), # 入替対象
+    heap_flag   = TRUE
   )
   
-  # 値を記録
+  # 数列を記録
   trace_df <- dplyr::bind_rows(trace_df, tmp_df)
-  trace_target_vec <- c(trace_target_vec, child_idx)
   
   # 挿入位置を子の位置に更新
   i <- child_idx
@@ -1015,33 +1018,37 @@ while(i*2 <= N) {
 }
 
 
-# 頂点の座標を作成
-trace_vertex_df <- trace_df |> 
+# 全ての頂点の座標を作成
+tmp_vertex_df <- trace_df |> 
   dplyr::group_by(step) |> # 座標計算用
   dplyr::mutate(
-    depth   = floor(log2(index)), # ノードごとの深さ
-    col_idx = index - 2^depth + 1, # 深さごとのノード番号
-    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向のノード位置
+    depth   = floor(log2(index)), # 縦方向の頂点位置
+    col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
   ) |> 
   dplyr::ungroup()
 
+# ヒープの頂点の座標を作成
+trace_vertex_df <- tmp_vertex_df |> 
+  dplyr::filter(heap_flag) # ヒープ要素を抽出(最大値を除去)
+
 # 辺の座標を作成
 edge_df <- dplyr::bind_rows(
-  # 子ノードの座標
+  # 子の座標
   trace_vertex_df |> 
     dplyr::filter(step == 0, depth > 0) |> # 1試行分のデータを抽出・根を除去
     dplyr::mutate(
       edge_id = index
     ), 
-  # 親ノードの座標
+  # 親の座標
   trace_vertex_df |> 
     dplyr::filter(step == 0, depth > 0) |> # 1試行分のデータを抽出・根を除去
     dplyr::mutate(
       edge_id = index, # 子インデックス
-      depth   = depth - 1, # ノードごとの深さ
+      depth   = depth - 1, # 縦方向の頂点位置
       index   = index %/% 2, # 親インデックス
-      col_idx = index - 2^depth + 1, # 深さごとのノード番号
-      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向のノード位置
+      col_idx = index - 2^depth + 1, # 深さごとの頂点番号
+      coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2) # 横方向の頂点位置
     )
 ) |> 
   dplyr::select(!step) |> # フレーム遷移の影響から外す
@@ -1058,62 +1065,39 @@ index_df <- trace_vertex_df |>
   ) |> 
   dplyr::select(!step) # フレーム遷移の影響から外す
 
-# ステップ数を取得
-max_step <- length(trace_target_vec)
-
 # 入替対象の頂点の座標を作成
-target_vertex_df <- dplyr::bind_rows(
-  # 削除と挿入
-  tibble::tibble(
-    step  = 1, 
-    index = c(1, initial_N), 
-    parent_flag = NA
-  ), 
-  # 親ノードの座標
-  tibble::tibble(
-    step  = 2:max_step, 
-    index = trace_target_vec[-max_step], # 入替元のインデックス
-    parent_flag = TRUE
-  ), 
-  # 子ノードの座標
-  tidyr::expand_grid(
-    step      = 2:max_step, 
-    childe_id = 0:1
-  ) |> 
-    dplyr::mutate(
-      index = trace_target_vec[step-1] * 2 + childe_id, # 入替元の子インデックス
-      parent_flag = FALSE
-    ) |> 
-    dplyr::filter(index <= N)
-) |> 
+target_vertex_df <- tmp_vertex_df |> 
+  dplyr::filter(target_flag) |> # 入替対象の親を抽出
   dplyr::mutate(
-    step = step - 1, # 表示フレームを調整
-    depth   = floor(log2(index)), 
-    col_idx = index - 2^depth + 1, 
-    coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2)
+    step = step - 1 # 表示フレームを調整
   ) |> 
   dplyr::arrange(step, index)
 
-# 入替対象の辺の座標を計算
+# 入替対象の辺の座標を作成
 target_edge_df <- dplyr::bind_rows(
-  # 削除と挿入
+  # 親の座標
   target_vertex_df |> 
-    dplyr::filter(is.na(parent_flag)) |> # 先頭と最後尾を抽出
+    dplyr::group_by(step) |> 
+    dplyr::filter(index == min(index)) |> # 親を抽出
+    dplyr::ungroup() |> 
     dplyr::mutate(
-      edge_id = 1 # 根インデックス
-    ), 
-  # 親ノードの座標
-  target_vertex_df |> 
-    dplyr::filter(parent_flag) |> # 親ノードを抽出
-    tidyr::uncount(weights = 2, .id = "childe_id") |> # 子ノード数に複製
-    dplyr::mutate(
-      childe_id = childe_id - 1, 
-      edge_id   = index * 2 + childe_id # 子インデックス
+      n = dplyr::if_else(
+        condition = step == 0, true = 1, false = 2
+      )
     ) |> 
-    dplyr::filter(edge_id <= N), # 子ノードがなければ除去
-  # 子ノードの座標
+    tidyr::uncount(weights = n, .id = "childe_id") |> # 子の数に複製
+    dplyr::mutate(
+      childe_id = childe_id - 1, # 行番号を子IDに変換
+      edge_id   = dplyr::if_else(
+        condition = step == 0, true = initial_N, false = index * 2 + childe_id # 子インデックス
+      )
+    ) |> 
+    dplyr::filter(edge_id <= initial_N), # 子がなければ除去
+  # 子の座標
   target_vertex_df |> 
-    dplyr::filter(!parent_flag) |> # 子ノードを抽出
+    dplyr::group_by(step) |> 
+    dplyr::filter(index != min(index)) |> # 子を抽出
+    dplyr::ungroup() |> 
     dplyr::mutate(
       edge_id = index
     )
@@ -1122,31 +1106,32 @@ target_edge_df <- dplyr::bind_rows(
 
 
 # ヒープ化のアニメーションを作図
+max_h <- floor(log2(N))
 graph <- ggplot() + 
-  geom_text(data = index_df,
-            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset),
-            size = 4, vjust = -1.7, color = "blue") + # インデックスラベル
-  geom_path(data = edge_df,
-            mapping = aes(x = coord_x, y = depth, group = edge_id),
+  geom_path(data = edge_df, 
+            mapping = aes(x = coord_x, y = depth, group = edge_id), 
             linewidth = 1) + # 辺
   geom_path(data = target_edge_df,
             mapping = aes(x = coord_x, y = depth, group = edge_id),
             color = "red", linewidth = 1, linetype = "dashed") + # 入替対象の辺
   geom_point(data = target_vertex_df,
-             mapping = aes(x = coord_x, y = depth, group = index),
+             mapping = aes(x = coord_x, y = depth, group = step),
              size = 14, color = "red", alpha = 0.5) + # 入替対象の頂点
-  geom_point(data = trace_vertex_df,
-             mapping = aes(x = coord_x, y = depth, group = id),
+  geom_point(data = trace_vertex_df, 
+             mapping = aes(x = coord_x, y = depth, group = id), 
              size = 12, shape = "circle filled", fill = "white", stroke = 1) + # 頂点
-  geom_text(data = trace_vertex_df,
-            mapping = aes(x = coord_x, y = depth, label = as.character(value), group = id),
+  geom_text(data = trace_vertex_df, 
+            mapping = aes(x = coord_x, y = depth, label = as.character(value), group = id), 
             size = 5) + # 値ラベル
+  geom_text(data = index_df, 
+            mapping = aes(x = coord_x, y = depth, label = index, hjust = offset), 
+            size = 4, vjust = -1.7, color = "green4") + # インデックスラベル
   gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
   gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
   scale_x_continuous(labels = NULL) + 
-  scale_y_reverse(breaks = 0:max(trace_vertex_df[["depth"]], na.rm = TRUE), minor_breaks = FALSE) + 
+  scale_y_reverse(breaks = 0:max_h, minor_breaks = FALSE) + 
   coord_cartesian(xlim = c(0, 1)) + 
-  labs(title = "heapify : pop", 
+  labs(title = "heapify : pop (down-heap)", 
        subtitle = "step: {next_state}", 
        x = "", y = "depth")
 
