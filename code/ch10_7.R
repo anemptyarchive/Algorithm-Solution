@@ -264,13 +264,11 @@ for(i in max_i:1) {
 
 # 頂点の座標を作成
 trace_vertex_df <- trace_df |> 
-  dplyr::group_by(step) |> # 座標計算用
   dplyr::mutate(
     depth   = floor(log2(index)), # 縦方向の頂点位置
     col_idx = index - 2^depth + 1, # 深さごとの頂点番号
     coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
-  ) |> 
-  dplyr::ungroup()
+  )
 
 # 辺の座標を作成
 edge_df <- dplyr::bind_rows(
@@ -538,13 +536,11 @@ while(i > 1) {
 
 # 頂点の座標を作成
 trace_vertex_df <- trace_df |> 
-  dplyr::group_by(step) |> # 座標計算用
   dplyr::mutate(
     depth   = floor(log2(index)), # 縦方向の頂点位置
     col_idx = index - 2^depth + 1, # 深さごとの頂点番号
     coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
-  ) |> 
-  dplyr::ungroup()
+  )
 
 # 辺の座標を作成
 edge_df <- dplyr::bind_rows(
@@ -668,7 +664,7 @@ id_vec <- 1:N
 iter <- 0
 for(n in 2:N) {
   
-  # 最後尾に要素を追加
+  # 末尾に要素を追加
   a <- c(a, initial_a[n])
   i <- n
   
@@ -736,13 +732,11 @@ trace_vertex_df <- dplyr::bind_rows(
   # 挿入済み要素の座標
   trace_df |> 
     dplyr::filter(insert_flag) |> # 挿入済み要素を抽出
-    dplyr::group_by(step) |> # 座標計算用
     dplyr::mutate(
       depth   = floor(log2(index)), # 縦方向の頂点位置
       col_idx = index - 2^depth + 1, # 深さごとの頂点番号
       coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
-    ) |> 
-    dplyr::ungroup(), 
+    ), 
   # 未挿入要素の座標
   trace_df |> 
     dplyr::filter(!insert_flag) |> # 未挿入要素を抽出
@@ -881,10 +875,10 @@ pop <- function(vec) {
   # 削除後の要素数を取得
   N <- length(vec) - 1
   
-  # 最後尾(挿入要素)の値を取得
+  # 末尾(挿入要素)の値を取得
   val <- vec[N+1]
   
-  # 最後尾の値を削除
+  # 末尾の値を削除
   vec <- vec[-(N+1)]
   
   # 根(親)のインデックスを設定
@@ -940,7 +934,7 @@ initial_N <- 20
 initial_a <- sample(x = 1:initial_N, size = initial_N, replace = FALSE) |> 
   heapify()
 
-# 最大値を削除して、最後尾を先頭に挿入
+# 最大値を削除して、末尾を先頭に挿入
 a <- c(initial_a[initial_N], initial_a[-c(1, initial_N)])
 
 # 削除後の要素数を取得
@@ -1020,13 +1014,11 @@ while(i*2 <= N) {
 
 # 全ての頂点の座標を作成
 tmp_vertex_df <- trace_df |> 
-  dplyr::group_by(step) |> # 座標計算用
   dplyr::mutate(
     depth   = floor(log2(index)), # 縦方向の頂点位置
     col_idx = index - 2^depth + 1, # 深さごとの頂点番号
     coord_x = (col_idx * 2 - 1) * 1/(2^depth * 2), # 横方向の頂点位置
-  ) |> 
-  dplyr::ungroup()
+  )
 
 # ヒープの頂点の座標を作成
 trace_vertex_df <- tmp_vertex_df |> 
