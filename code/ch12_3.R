@@ -20,37 +20,37 @@ library(ggplot2)
 # 挿入ソートの実装
 insertion_sort <- function(vec) {
   
-  # 数列の要素数を取得
+  # 要素数を取得
   N <- length(vec)
   
-  # 要素ごとに処理
+  # インデックス順に処理:(i = 1, ..., N)
   for(i in 2:N) { # (1番目は不要)
     
-    # i番目の値を取得
+    # 挿入対象を取出
     val <- vec[i]
     
-    # i番目から逆順に挿入位置jを探索:(j ≤ i)
-    for(j in (i-1):0) { # (i番目は不要・0番目は挿入処理との兼ね合い用)
+    # 対象位置iから逆順に挿入位置jを探索:(j = 1, ..., i)
+    for(j in (i-1):0) { # (i番目は不要)
       
-      # j番目とi番目の値を大小比較
-      if(j <= 0) {
+      # j番目とi番目を大小比較
+      if(j == 0) { # i番目が最小の場合
         
-        # 全要素を比較したらループを終了
+        # ループを終了
         break
         
-      } else if(vec[j] > val) {
+      } else if(vec[j] > val) { # j番目が大きい場合
         
-        # j番目の値を1つ後に移動
+        # j番目を1つ後に移動
         vec[j+1] <- vec[j]
         
-      } else {
+      } else { # i番目が大きい場合
         
-        # i番目の値以下ならループを終了
+        # ループを終了
         break
       }
     }
     
-    # i番目の値をj番目に挿入
+    # 挿入位置jに対象を挿入
     vec[j+1] <- val
   }
   
@@ -95,53 +95,52 @@ table(a)
 
 ### 操作ごとの集計 -----
 
-# 数列を格納
-tmp_df <- tibble::tibble(
-  step  = 0,   # 試行回数
-  id    = 1:N, # 元のインデックス
-  index = 1:N, # 各試行のインデックス
-  value = a    # 要素
-)
+# インデックスを初期化
+id_vec <- 1:N
 
-# 作図用のオブジェクトを初期化
-id_vec   <- 1:N
-trace_df <- tmp_df
+# 初期値を格納
+trace_df <- tibble::tibble(
+  step  = 0,      # 入替回数
+  id    = id_vec, # 元のインデックス
+  index = id_vec, # 入替後のインデックス
+  value = a       # 入替後の数列
+)
 
 # 挿入ソート
 for(i in 1:N) {
   if(i > 1) { # (初回は不要)
     
-    # i番目の値を取得
+    # 挿入対象を取出
     v <- a[i]
     
-    # i番目から逆順に挿入位置jを探索:(j ≤ i)
-    for(j in (i-1):0) { # (i番目は不要・0番目は挿入処理との兼ね合い用)
+    # 対象位置iから逆順に挿入位置jを探索:(j = 1, ..., i)
+    for(j in (i-1):0) { # (i番目は不要)
       
-      # j番目とi番目の値を大小比較
-      if(j <= 0) {
+      # j番目とi番目を大小比較
+      if(j <= 0) { # i番目が最小の場合
         
-        # 全要素を比較したらループを終了
+        # ループを終了
         break
         
-      } else if(a[j] > v) {
+      } else if(a[j] > v) { # j番目が大きい場合
         
-        # j番目の値を1つ後に移動
-        a[j+1] <- a[j]
+        # j番目を1つ後に移動
+        a[j+1]      <- a[j]
         id_vec[1:N] <- replace(x = id_vec, list = j+1, values = id_vec[j])
         
-      } else {
+      } else { # i番目が大きい場合
         
-        # i番目の値以下ならループを終了
+        # ループを終了
         break
       }
     }
     
-    # i番目の値をj番目に挿入
-    a[j+1] <- v
+    # 挿入位置jに対象を挿入
+    a[j+1]      <- v
     id_vec[1:N] <- replace(x = id_vec, list = j+1, values = i)
   }
   
-  # 数列を格納
+  # 更新値を格納
   tmp_df <- tibble::tibble(
     step  = i, 
     id    = id_vec, 
@@ -149,67 +148,108 @@ for(i in 1:N) {
     value = a
   )
   
-  # 数列を記録
+  # 作図用データを記録
   trace_df <- dplyr::bind_rows(trace_df, tmp_df)
   
   # 途中経過を表示
-  print(paste0("--- step: ", i, " ---"))
+  print(paste("-----", "step:", i, "-----"))
   print(a)
 }
 
 
 ### 装飾用のデータの作成 -----
 
+# グラフサイズを設定
+axis_val_max <- a |> 
+  abs() |> 
+  max() |> 
+  ceiling()
+axis_val_min <- -axis_val_max
+
 # 挿入データを作成
 target_df <- trace_df |> 
-    dplyr::filter((step + 1) == index) # i番目の要素を抽出
+  dplyr::filter((step+1) == index) # i番目の要素を抽出
 
 # 重複ラベルを作成
 dup_label_df <- trace_df |> 
   dplyr::arrange(step, id) |> # IDの割当用
-  dplyr::group_by(step, value) |> # IDの割当用
   dplyr::mutate(
-    dup_id    = dplyr::row_number(id), # 重複IDを割り当て
+    dup_id    = dplyr::row_number(id), # 重複IDを割当
     dup_num   = max(dup_id), # 重複の判定用
-    dup_label = dplyr::if_else(
-      condition = dup_num > 1, 
-      true = paste0("(", dup_id, ")"), 
-      false = ""
-    ) # 重複要素のみラベルを作成
+    dup_label = (dup_num > 1) |> # 重複を判定
+      dplyr::if_else(
+        true  = paste0("(", dup_id, ")"), 
+        false = ""
+      ), # 重複ラベル
+    .by = c(step, value)
   ) |> 
-  dplyr::ungroup() |> 
   dplyr::arrange(step, index)
 
+# ソート済み範囲を作成
+range_sorted_df <- tibble::tibble(
+  step   = 0:N, 
+  left   = 1 - 0.5, 
+  right  = (1-1):N + 0.5, 
+  bottom = axis_val_min, 
+  top    = axis_val_max, 
+  x      = 0.5 * (left + right), 
+  y      = 0.5 * (bottom + top), 
+  w      = right - left, 
+  h      = top - bottom
+)
+
+# 未ソート範囲を作成
+range_random_df <- tibble::tibble(
+  step   = 0:N, 
+  left   = 1:(N+1) - 0.5, 
+  right  = N + 0.5, 
+  bottom = axis_val_min, 
+  top    = axis_val_max, 
+  x      = 0.5 * (left + right), 
+  y      = 0.5 * (bottom + top), 
+  w      = right - left, 
+  h      = top - bottom
+)
 
 ### アニメーションの作成 -----
 
 # 遷移フレーム数を指定
 s <- 20
 
+# グラフサイズを設定
+axis_idx_min <- 0 # (対象値の線用)
+
 # ソートのアニメーションを作図
 graph <- ggplot() + 
+  geom_tile(
+    data    = range_random_df,
+    mapping = aes(x = x, y = y, width = w, height = h, color = "random"), 
+    fill = "orange", alpha = 0.1, linewidth = 1, linetype = "dashed"
+  ) + # 未ソート範囲
+  geom_tile(
+    data    = range_sorted_df,
+    mapping = aes(x = x, y = y, width = w, height = h, color = "sorted"), 
+    fill = "green4", alpha = 0.1, linewidth = 1, linetype = "dashed"
+  ) + # 既ソート範囲
   geom_bar(
     data    = trace_df, 
     mapping = aes(x = index, y = value, fill = factor(value), group = factor(id)), 
-    stat = "identity"
+    stat = "identity", show.legend = FALSE
   ) + # 数列
   geom_bar(
     data    = target_df, 
     mapping = aes(x = index, y = value, group = factor(id)), 
     stat = "identity",
-    color = "red", alpha = 0, linewidth = 1, linetype = "dashed"
+    color = "red", fill = NA, linewidth = 1, linetype = "dashed"
   ) + # 挿入対象
   geom_segment(
     data = target_df, 
-    mapping = aes(
-      x = index, y = value, xend = -2, yend = value, 
-      color = factor(value), group = factor(id)
-    ), 
-    linewidth = 1, linetype = "dashed", show.legend = FALSE
-  ) + # 挿入対象の上限値
+    mapping = aes(x = index, y = value, xend = axis_idx_min, yend = value, group = factor(id)), # (-Infだと遷移しない?)
+    color = "red", linewidth = 1, linetype = "dotted"
+  ) + # 対象値
   geom_text(
     data    = trace_df, 
-    mapping = aes(x = index, y = 0, label = as.character(value), group = factor(id)), 
+    mapping = aes(x = index, y = 0, label = value, group = factor(id)), 
     vjust = -0.5, size = 4
   ) + # 要素ラベル
   geom_text(
@@ -218,13 +258,16 @@ graph <- ggplot() +
     vjust = 1, size = 4
   ) + # 重複ラベル
   gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
-  gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
-  coord_cartesian(xlim = c(0, N+1)) + # (上限値の線用)
-  theme(legend.position = "none") + 
+  gganimate::ease_aes(default = "cubic-in-out") + # 遷移の緩急
+  scale_color_manual(
+    breaks = c("sorted", "random"), 
+    values = c("green4", "orange")
+  ) + # 凡例の表示用
+  coord_cartesian(xlim = c(1-0.5, N+0.5)) + # 対象値の線用
   labs(
     title = "insertion sort", 
     subtitle = "step: {next_state}", 
-    fill = "value", 
+    color = "elements", fill = "value", 
     x = "index", y = "value"
   )
 
