@@ -1,15 +1,21 @@
 
-# 12.4 マージソート -------------------------------------------------------------
+# マージソート -----------------------------------------------------------------
+
+## chapter 12.4
+## 実装と可視化
+
 
 # 利用パッケージ
 library(tidyverse)
 library(gganimate)
 
-# チェック用
+# パッケージを読込
 library(ggplot2)
 
 
-# 実装 ----------------------------------------------------------------------
+# ソートアルゴリズムの実装 -----------------------------------------------------
+
+### 実装 -----
 
 # マージソートの実装
 merge_sort <- function(vec) {
@@ -62,21 +68,38 @@ merge_sort <- function(vec) {
 }
 
 
-# 要素数を指定
-N <- 50
+### 確認 -----
 
-# 数列を生成
-a <- sample(x = 1:(2*N), size = N, replace = TRUE)
-a <- rnorm(n = N, mean = 0, sd = 1) |> 
-  round(digits = 1)
-a; table(a)
+# 要素数を指定
+N <- 10
+
+# 最大値を指定
+max_val <- 20
+
+# 乱数を生成
+random_vals <- sample(x = 1:max_val, size = N, replace = TRUE)
 
 # ソート
-merge_sort(a)
-sum(!(merge_sort(a) == sort(a)))
+sorted_vals <- merge_sort(random_vals)
+
+# 結果を確認
+sum(!(sort(random_vals) == sorted_vals))
+random_vals; sorted_vals; table(random_vals)
 
 
-# 可視化 ---------------------------------------------------------------------
+# ソートアルゴリズムの可視化 ---------------------------------------------------
+
+# 要素数を指定
+N <- 10
+
+# 数列を生成
+a <- sample(x = 0:(2*N), size = N, replace = TRUE) # 一様乱数
+a <- rnorm(n = N, mean = 0, sd = 1) |> # 正規乱数
+  round(digits = 1)
+table(a)
+
+
+### 可視化用の関数の作成 -----
 
 # インデックスの分割の実装
 trace_idx <- function(mat = NA, iter = 0, left = 1, right = 1) {
@@ -125,15 +148,14 @@ trace_idx <- function(mat = NA, iter = 0, left = 1, right = 1) {
 }
 
 
-# 要素数を取得
-N <- length(a)
+### 操作ごとの集計 -----
 
 # 数列を格納
 tmp_df <- tibble::tibble(
-  iteration = 0,   # 試行回数
-  id        = 1:N, # 元のインデックス
-  index     = 1:N, # 各試行のインデックス
-  value     = a    # 要素
+  step  = 0,   # 試行回数
+  id    = 1:N, # 元のインデックス
+  index = 1:N, # 各試行のインデックス
+  value = a    # 要素
 )
 
 # 分割インデックスを作成
@@ -209,35 +231,37 @@ for(i in 1:max_iter) {
   
   # 数列を格納
   tmp_df <- tibble::tibble(
-    iteration = i, 
-    id        = id_vec, 
-    index     = 1:N, 
-    value     = a
+    step  = i, 
+    id    = id_vec, 
+    index = 1:N, 
+    value = a
   )
   
   # 数列を記録
   trace_df <- dplyr::bind_rows(trace_df, tmp_df)
 
   # 途中経過を表示
-  print(paste0("--- iteration: ", i, " ---"))
+  print(paste0("----- step: ", i, " -----"))
   print(a)
 }
 
 
+### 装飾用のデータの作成 -----
+
 # 入替範囲を作成
 range_df <- trace_idx_mat[max_iter:1, ] |> # (最後を除き逆順に並べ替え)
   tibble::as_tibble(.name_repair = NULL) |> 
-  tibble::add_column(iteration = 0:(max_iter-1)) |> # 試行回数列を追加
+  tibble::add_column(step = 0:(max_iter-1)) |> # 試行回数列を追加
   tidyr::pivot_longer(
-    cols = !iteration, 
+    cols = !step, 
     names_to = "index", 
     names_prefix = "V", 
     names_transform = list(index = as.numeric), 
     values_to = "split_flag"
   ) |> # 分割インデックス列をまとめる
   dplyr::filter(split_flag == 1) |> # 分割位置を抽出
-  dplyr::arrange(iteration, index) |> # 分割範囲の作成用
-  dplyr::group_by(iteration) |> # 分割範囲の作成用
+  dplyr::arrange(step, index) |> # 分割範囲の作成用
+  dplyr::group_by(step) |> # 分割範囲の作成用
   dplyr::mutate(
     # 分割範囲を作成
     left  = index, 
@@ -255,8 +279,8 @@ range_df <- trace_idx_mat[max_iter:1, ] |> # (最後を除き逆順に並べ替�
 
 # 重複ラベルを作成
 dup_label_df <- trace_df |> 
-  dplyr::arrange(iteration, id) |> # IDの割当用
-  dplyr::group_by(iteration, value) |> # IDの割当用
+  dplyr::arrange(step, id) |> # IDの割当用
+  dplyr::group_by(step, value) |> # IDの割当用
   dplyr::mutate(
     dup_id    = dplyr::row_number(id), # 重複IDを割り当て
     dup_num   = max(dup_id), # 重複の判定用
@@ -267,8 +291,14 @@ dup_label_df <- trace_df |>
     ) # 重複要素のみラベルを作成
   ) |> 
   dplyr::ungroup() |> 
-  dplyr::arrange(iteration, index)
+  dplyr::arrange(step, index)
 
+
+
+### アニメーションの作成 -----
+
+# 遷移フレーム数を指定
+s <- 20
 
 # ソートのアニメーションを作図
 graph <- ggplot() + 
@@ -279,28 +309,25 @@ graph <- ggplot() +
             color = "red", alpha = 0, linewidth = 1, linetype = "dashed") + # 入替範囲
   geom_text(data = trace_df, 
             mapping = aes(x = index, y = 0, label = as.character(value), group = factor(id)), 
-            vjust = -0.5, size = 5) + # 要素ラベル
+            vjust = -0.5, size = 4) + # 要素ラベル
   geom_text(data = dup_label_df, 
             mapping = aes(x = index, y = 0, label = dup_label, group = factor(id)), 
             vjust = 1, size = 4) + # 重複ラベル
-  gganimate::transition_states(states = iteration, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
+  gganimate::transition_states(states = step, transition_length = 9, state_length = 1, wrap = FALSE) + # フレーム遷移
   gganimate::ease_aes("cubic-in-out") + # 遷移の緩急
   theme(panel.grid.minor.x = element_blank(), 
         legend.position = "none") + 
   labs(title = "merge sort", 
-       subtitle = "iteration: {next_state}", 
+       subtitle = "step: {next_state}", 
        fill = "value", 
        x = "index", y = "value")
 
-# 遷移フレーム数を指定
-s <- 20
-
-# gif画像を作成
+# 動画を作成
 gganimate::animate(
   plot = graph, 
-  nframes = (max_iter+1 + 2)*s, start_pause = s, end_pause = s, fps = 20, 
-  width = 1200, height = 900, 
-  renderer = gganimate::gifski_renderer()
+  nframes = (N+1 + 2)*s, start_pause = s, end_pause = s, fps = 60,
+  width = 1500, height = 900, units = "px", res = 100, 
+  renderer = gganimate::av_renderer(file = "figure/merge_sort.mp4")
 )
 
 
